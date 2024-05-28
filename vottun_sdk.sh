@@ -59,7 +59,7 @@ token_uriPOAP -> contractAddress network id
 Example:~$ upload_file "random image" "/home/user/Pictures/a_random_image.jpg"
 Example:~$ deploy20 myToken TKN "My first token" 3000000000000000000 11155111 999999
 Example:~$ mint721 0xad799...b63f1 1 https://ipfsgw.vottun.tech/ipfs/bafkr...sh2s6 bafkr...sh2s6 80002 0xa48dd...8f1ec "" 3000000
-Example:~$ mint1155 0x12d69...d7C7a2 97 0x423cd...aC137 3 1000
+Example:~$ mint_batch 0x12d69...d7C7a2 97 0x423cd...aC137 999 666 333 1 2 3
 menu
 }
 

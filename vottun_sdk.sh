@@ -8,6 +8,8 @@ help(){ # HELP MENU
 cat << menu
 The parameters must be entered after the function name, according to the stipulated order, separated by a space.
 "Quotation marks should be used when the variable value contains spaces or special characters."
+(Optional parameters are indicated between parentheses.)
+If you want to omit an optional parameter but want to specify the next one, simply add "" in the place of that parameter.
 For detailed information about this APIs visit: https://docs.vottun.io/
 
 ***AVAILABLE FUNCTIONS***
@@ -18,11 +20,11 @@ upload_folder -> filePath
 upload_metadata -> name image description attributesTrait attributesValue
 
 ERC-20:
-deploy20 -> name symbol alias initialSupply network
-transfer20 -> contractAddress recipient network amount
-transfer_from -> contractAddress sender recipient network amount
-increase_allowance -> contractAddress spender network addedValue
-decrease_allowance -> contractAddress spender network substractedValue
+deploy20 -> name symbol alias initialSupply network (gasLimit)
+transfer20 -> contractAddress recipient network amount (gasLimit)
+transfer_from -> contractAddress sender recipient network amount (gasLimit)
+increase_allowance -> contractAddress spender network addedValue (gasLimit)
+decrease_allowance -> contractAddress spender network substractedValue (gasLimit)
 allowance -> contractAddress network owner spender
 name -> contractAddress network
 symbol -> contractAddress network
@@ -31,15 +33,15 @@ decimals -> contractAddress network
 balance_of20 -> contractAddress network address
 
 ERC-721:
-deploy721 -> name symbol network alias
-mint721 -> recipientAddress tokenId ipfsUri ipfsHash network contractAddress royaltyPercentage
+deploy721 -> name symbol network (alias) (gasLimit)
+mint721 -> recipientAddress tokenId ipfsUri ipfsHash network contractAddress (royaltyPercentage) (gasLimit)
 transfer721 -> contractAddress network id from to
 balance_of721 -> contractAddress network address
 token_uri721 -> contractAddress network id
 owner_of -> contractAddress network id
 
 ERC-1155:
-deploy1155 -> name symbol ipfsUri royaltyRecipient royaltyValue network alias
+deploy1155 -> name symbol ipfsUri royaltyRecipient royaltyValue network alias (gasLimit)
 mint1155 -> contractAddress network to id amount
 mint_batch -> contractAddress network to amount1 amount2 amount3 id1 id2 id3
 transfer1155 -> contractAddress network to id amount
@@ -48,7 +50,7 @@ balance_of1155 -> contractAddress network address id
 token_uri1155 -> contractAddress network id
 
 POAP:
-deployPOAP -> name amount ipfsUri network alias
+deployPOAP -> name amount ipfsUri network alias (gasLimit)
 transferPOAP -> contractAddress network to id
 balance_ofPOAP -> contractAddress network address id
 token_uriPOAP -> contractAddress network id
@@ -56,6 +58,7 @@ token_uriPOAP -> contractAddress network id
 ...
 Example:~$ upload_file "random image" "/home/user/Pictures/a_random_image.jpg"
 Example:~$ deploy20 myToken TKN "My first token" 3000000000000000000 11155111 999999
+Example:~$ mint721 0xad799...b63f1 1 https://ipfsgw.vottun.tech/ipfs/bafkr...sh2s6 bafkr...sh2s6 80002 0xa48dd...8f1ec "" 3000000
 Example:~$ mint1155 0x12d69...d7C7a2 97 0x423cd...aC137 3 1000
 menu
 }
@@ -123,18 +126,27 @@ local symbol="$2"
 local alias="$3"
 local initialSupply="$4"
 local network="$5"
+local gasLimit="$6"
+
+local data='{
+    "name": "'"$name"'",
+    "symbol": "'"$symbol"'",
+    "alias": "'"$alias"'",
+    "initialSupply": '$initialSupply',
+    "network": '$network''
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/erc20/deploy' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "name": "'"$name"'",
-    "symbol": "'"$symbol"'",
-    "alias": "'"$alias"'",
-    "initialSupply": '$initialSupply',
-    "network": '$network'
-}'
+--data-raw "$data"
+
 echo ""
 }
 
@@ -144,17 +156,26 @@ local contractAddress="$1"
 local recipient="$2"
 local network="$3"
 local amount="$4"
+local gasLimit="$5"
+
+local data='{
+    "contractAddress": "'"$contractAddress"'",
+    "recipient": "'"$recipient"'",
+    "network": '$network',
+    "amount": '$amount''
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/erc20/transfer' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "contractAddress": "'"$contractAddress"'",
-    "recipient": "'"$recipient"'",
-    "network": '$network',
-    "amount": '$amount'
-}'
+--data-raw "$data"
+
 echo ""
 }
 
@@ -165,38 +186,56 @@ local sender="$2"
 local recipient="$3"
 local network="$4"
 local amount="$5"
+local gasLimit="$6"
+
+local data='{
+    "contractAddress": "'"$contractAddress"'",
+    "sender": "'"$sender"'",
+    "recipient": "'"$recipient"'",
+    "network": '$network',
+    "amount": '$amount''
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/erc20/transferFrom' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "contractAddress": "'"$contractAddress"'",
-    "sender": "'"$sender"'",
-    "recipient": "'"$recipient"'",
-    "network": '$network',
-    "amount": '$amount'
-}'
+--data-raw "$data"
+
 echo ""
 }
 
-increase_allowance(){ # GIVE THE RIGHT TO MANAGE THE STIPULATED AMOUNT OF TOKENS TO THE SPENDER ACCOUNT
+increase_allowance() { # GIVE THE RIGHT TO MANAGE THE STIPULATED AMOUNT OF TOKENS TO THE SPENDER ACCOUNT
 
 local contractAddress="$1"
 local spender="$2"
 local network="$3"
 local addedValue="$4"
+local gasLimit="$5"
 
-curl --location 'https://api.vottun.tech/erc/v1/erc20/increaseAllowance' \
---header 'x-application-vkn: '"$APP_ID"'' \
---header 'Authorization: Bearer '"$API_KEY"'' \
---header 'Content-Type: application/json' \
---data-raw '{
+local data='{
     "contractAddress": "'"$contractAddress"'",
     "spender": "'"$spender"'",
     "network": '$network',
-    "addedValue": '$addedValue'
-}'
+    "addedValue": '$addedValue''
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
+
+curl --location 'https://api.vottun.tech/erc/v1/erc20/increaseAllowance' \
+--header 'x-application-vkn: '$APP_ID'' \
+--header 'Authorization: Bearer '$API_KEY'' \
+--header 'Content-Type: application/json' \
+--data-raw "$data"
+
 echo ""
 }
 
@@ -206,17 +245,26 @@ local contractAddress="$1"
 local spender="$2"
 local network="$3"
 local substractedValue="$4"
+local gasLimit="$5"
+
+local data='{
+    "contractAddress": "'"$contractAddress"'",
+    "spender": "'"$spender"'",
+    "network": '$network',
+    "substractedValue": '$substractedValue''
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/erc20/decreaseAllowance' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "contractAddress": "'"$contractAddress"'",
-    "spender": "'"$spender"'",
-    "network": '$network',
-    "substractedValue": '$substractedValue'
-}'
+--data-raw "$data"
+
 echo ""
 }
 
@@ -331,17 +379,29 @@ local name="$1"
 local symbol="$2"
 local network="$3"
 local alias="$4"
+local gasLimit="$5"
+
+local data='{
+    "name": "'"$name"'",
+    "symbol": "'"$symbol"'",
+    "network": '$network''
+
+if [ -n "$alias" ]; then
+    data+=',"alias":"'"$alias"'"'
+fi
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/erc721/deploy' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "name": "'"$name"'",
-    "symbol": "'"$symbol"'",
-    "network": '$network',
-    "alias": "'"$alias"'"
-}'
+--data-raw "$data"
+
 echo ""
 }
 
@@ -354,20 +414,32 @@ local ipfsHash="$4"
 local network="$5"
 local contractAddress="$6"
 local royaltyPercentage="$7"
+local gasLimit="$8"
 
-curl --location 'https://api.vottun.tech/erc/v1/erc721/mint' \
---header 'x-application-vkn: '$APP_ID'' \
---header 'Authorization: Bearer '$API_KEY'' \
---header 'Content-Type: application/json' \
---data-raw '{
+local data='{
     "recipientAddress": "'"$recipientAddress"'",
     "tokenId": '$tokenId',
     "ipfsUri": "'"$ipfsUri"'",
     "ipfsHash": "'"$ipfsHash"'",
     "network": '$network',
-    "contractAddress": "'"$contractAddress"'",
-    "royaltyPercentage": '$royaltyPercentage'
-}'
+    "contractAddress": "'"$contractAddress"'"'
+
+if [ -n "$royaltyPercentage" ]; then
+    data+=',"royaltyPercentage":'$royaltyPercentage''
+fi
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
+
+curl --location 'https://api.vottun.tech/erc/v1/erc721/mint' \
+--header 'x-application-vkn: '$APP_ID'' \
+--header 'Authorization: Bearer '$API_KEY'' \
+--header 'Content-Type: application/json' \
+--data-raw "$data"
+
 echo ""
 }
 
@@ -459,20 +531,29 @@ local royaltyRecipient="$4"
 local royaltyValue="$5"
 local network="$6"
 local alias="$7"
+local gasLimit="$8"
 
-curl --location 'https://api.vottun.tech/erc/v1/erc1155/deploy' \
---header 'x-application-vkn: '$APP_ID'' \
---header 'Authorization: Bearer '$API_KEY'' \
---header 'Content-Type: application/json' \
---data-raw '{
+local data='{
     "name": "'"$name"'",
     "symbol": "'"$symbol"'",
     "ipfsUri": "'"$ipfsUri"'",
     "royaltyRecipient": "'"$royaltyRecipient"'",
     "royaltyValue": '$royaltyValue',
     "network": '$network',
-    "alias": "'"$alias"'"
-}'
+    "alias": "'"$alias"'"'
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
+
+curl --location 'https://api.vottun.tech/erc/v1/erc1155/deploy' \
+--header 'x-application-vkn: '$APP_ID'' \
+--header 'Authorization: Bearer '$API_KEY'' \
+--header 'Content-Type: application/json' \
+--data-raw "$data"
+
 echo ""
 }
 
@@ -509,7 +590,6 @@ local amount3="$6"
 local id1="$7"
 local id2="$8"
 local id3="$9"
-
 
 curl --location 'https://api.vottun.tech/erc/v1/erc1155/mintbatch' \
 --header 'x-application-vkn: '$APP_ID'' \
@@ -637,18 +717,27 @@ local amount="$2"
 local ipfsUri="$3"
 local network="$4"
 local alias="$5"
+local gasLimit="$6"
+
+local data='{
+    "name": "'"$name"'",
+    "amount": '$amount',
+    "ipfsUri": "'"$ipfsUri"'",
+    "network": '$network',
+    "alias": "'"$alias"'"'
+
+if [ -n "$gasLimit" ]; then
+    data+=',"gasLimit":'$gasLimit''
+fi
+
+data+='}'
 
 curl --location 'https://api.vottun.tech/erc/v1/poap/deploy' \
 --header 'x-application-vkn: '$APP_ID'' \
 --header 'Authorization: Bearer '$API_KEY'' \
 --header 'Content-Type: application/json' \
---data-raw '{
-    "name": "'"$name"'",
-    "amount": '$amount',
-    "ipfsUri": "'"$ipfsUri"'",
-    "network": '$network',
-    "alias": "'"$alias"'"
-}'
+--data-raw "$data"
+
 echo ""
 }
 

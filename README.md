@@ -5,6 +5,9 @@ You can easily obtain them accessing your Vottun account. (https://app.vottun.io
 
 This script can be run on any Unix-like systems with Bash installed (such as Linux and macOS).
 
+Feel free to make any modifications you consider pertinent in order to adapt it to your needs.
+
+
 
 To run it, first go to the script path and give it execution permissions with:
 

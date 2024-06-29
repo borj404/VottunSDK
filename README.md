@@ -1,31 +1,39 @@
-This SDK has been developed so that users of Unix-like systems can run the Vottun APIs directly from the terminal.
+This SDK has been developed so that users of Unix-like systems can easily run the Vottun APIs from the terminal.
 
-Change the content of lines 3-4 between "" with your own App ID and API key.
-You can easily obtain them accessing your Vottun account. (https://app.vottun.io/)
-
-This script can be run on any Unix-like systems with Bash installed (such as Linux and macOS).
+Change the content of lines 5-6 between "" with your own App ID and API key.
+You can easily obtain them accessing your [Vottun account](https://app.vottun.io/).
 
 Feel free to make any modifications you consider pertinent in order to adapt it to your needs.
 
+Please let me know if you encounter any errors or issues while running this script.
 
+## To run it
 
-To run it, first go to the script path and give it execution permissions with:
+First go to the script path and give it execution permissions:
 
-~$ chmod +x vottun_sdk.sh
+```
+chmod +x vottun_sdk.sh
+```
 
 Then run it:
 
-~$ ./vottun_sdk.sh
+```
+./vottun_sdk.sh
+```
+### Or
 
+It can also be executed directly within the current shell environment:
 
-It can also be executed directly within the current shell environment with:
+```
+source vottun_sdk.sh
+```
 
-~$ source vottun_sdk.sh
-
-
+## Menu & Docs
 
 Type "help" to show the help menu with all available functions.
 
-For detailed information about the APIs included in this script visit: 
+For detailed information about the APIs included in this script check the [documentation](https://docs.vottun.io/).
 
-https://docs.vottun.io/
+## Support
+
+For any questions contact me through [Discord](https://discord.com/users/1206334838093643817).

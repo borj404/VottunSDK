@@ -1,0 +1,2485 @@
+#!/bin/bash
+
+APP_ID="HERE YOUR APP ID"
+API_KEY="HERE YOUR API KEY"
+
+cat << banner
+
+██╗░░░██╗░█████╗░████████████████╗██╗░░░██╗███╗░░██╗ ░█▀▀█ ▒█▀▀█ ▀█▀ █▀▀
+██║░░░██║██╔══██╗╚══██╔═════██╔══╝██║░░░██║████╗░██║ ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
+╚██╗░██╔╝██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║ ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
+░╚████╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██║╚████║
+░░╚██╔╝░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.3.0
+░░░╚═╝░░░░╚════╝░░░░╚═╝░░░░░╚═╝░░░░╚═════╝░╚═╝░░╚══╝ Scripted by @borj404
+
+banner
+
+help(){ # HELP MENU
+
+cat << menu
+
+Type the function and fill in the required parameters
+Press ENTER after each prompt to continue
+To undo the previous entry, type ' << , .. , !undo , !back or !del ' 
+(Optional parameters are indicated in parentheses)
+
+For detailed information about this APIs, visit: https://docs.vottun.io/
+
+***AVAILABLE FUNCTIONS***
+
+IPFS:
+~$ upload_file -> Upload a binary file to IPFS
+~$ upload_folder -> Upload a zip with multiple files to IPFS
+~$ upload_metadata -> Upload a JSON file to IPFS
+
+ERC-20:
+~$ deploy20 -> Deploy an ERC-20 smart contract
+~$ transfer20 -> Transfer tokens to an address
+~$ transfer_from -> Transfer tokens from a sender's account to a receiver's address
+~$ increase_allowance -> Grant a spender account the right to manage a specified amount of tokens
+~$ decrease_allowance -> Revoke a spender account's right to manage a specified amount of tokens
+~$ allowance -> Display the total amount of tokens the owner has authorized the spender to transact
+~$ name -> Display the name of a smart contract
+~$ symbol -> Display the symbol of a smart contract
+~$ supply -> Display the total supply of tokens created in an ERC-20 smart contract
+~$ decimals -> Display the decimals used for tokens in an ERC-20 smart contract
+~$ balance20 -> Display the balance of tokens held by an address
+
+ERC-721:
+~$ deploy721 -> Deploy an ERC-721 smart contract
+~$ mint721 -> Mint an NFT with the provided metadata to the specified address
+~$ transfer721 -> Transfer an NFT to an address
+~$ balance721 -> Display the NFT balance of an address in the specified smart contract and network
+~$ uri721 -> Display the metadata URI for an NFT in the specified contract
+~$ owner -> Display the address of the owner of an NFT
+
+ERC-1155:
+~$ deploy1155 -> Deploy an ERC-1155 smart contract
+~$ mint1155 -> Mint the specified amount of copies of an NFT with the provided metadata to the given address
+~$ mint_batch -> Mint the specified amount of copies of multiple NFTs with the provided metadata to the given address
+~$ transfer1155 -> Transfer the specified amount of copies of an NFT to the given address
+~$ transfer_batch -> Transfer the specified amount of copies of multiple NFTs to the given address
+~$ balance1155 -> Display the amount of an NFT for the given address and smart contract on a specified network
+~$ uri1155 -> Display the URI of the metadata for the NFT from the given contract
+
+POAP:
+~$ deployPOAP -> Deploy a POAP smart contract and mint the tokens
+~$ transferPOAP -> Transfer an NFT to the given address
+~$ balancePOAP -> Display the amount of an NFT for the given address and smart contract on a specified network
+~$ uriPOAP -> Display the URI of the metadata for the NFT from the given contract
+
+menu
+}
+
+_check_input() {
+    local prompt="$1"
+    local var_name="$2"
+    local undo_step="$3"
+    local required="$4"
+    local validate_cmd="$5"
+    local empty_err="$6"
+    local format_err="$7"
+    
+    while true; do
+        read -e -p "$prompt" input
+        
+        if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+            if [[ "$undo_step" -ne -1 ]]; then
+                return 99
+            else
+                echo "Nothing to undo!"
+                continue
+            fi
+        fi
+
+        if [[ "$required" == "true" && -z "$input" ]]; then
+            echo "Error: $empty_err"
+        elif [ -n "$input" ] && ! eval "$validate_cmd"; then
+            echo "Error: $format_err"
+        else
+            eval "$var_name=\"\$input\""
+            return 0
+        fi
+    done
+}
+
+_confirmation() {
+    read -p "Do you want to proceed with these parameters? (Y/N): " confirm
+    case "$confirm" in
+        [Yy]*)
+            echo ""
+            return 0
+            ;;
+        [Nn]*)
+            echo ""
+            echo "Process cancelled."
+            return 1
+            ;;
+        *)
+            echo ""
+            echo "Invalid input. Process cancelled."
+            return 1
+            ;;
+    esac
+}
+
+
+############
+### IPFS ###
+############
+
+upload_file(){ # UPLOAD A BINARY FILE TO IPFS
+
+    local filename filePath step=1
+
+    echo "Please enter the following parameters to upload the file to IPFS:"
+    echo "filename filePath"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Filename: " filename -1 "true" 'true' "Filename is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "File Path: " filePath 1 "true" 'true' "File Path is required." ""
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+
+                if [ ! -f "$filePath" ]; then
+                    echo "Error: File doesn't exist at the specified path."
+                    continue    
+                fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Filename: $filename"
+    echo "File Path: $filePath"
+    echo ""
+
+    _confirmation || return 0
+
+    curl --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/upload' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --form 'filename="'"$filename"'"' \
+    --form 'file=@"'"$filePath"'"'
+
+    echo ""
+}
+
+upload_folder(){ # UPLOAD A ZIP WITH MULTIPLE FILES TO IPFS
+
+    local filePath step=1
+
+    echo "Please enter the file path to upload the folder to IPFS:"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "File Path: " filePath -1 "true" 'true' "File Path is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+
+                if [ ! -f "$filePath" ]; then
+                    echo "Error: File doesn't exist at the specified path."
+                    continue    
+                fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameter:"
+    echo "File Path: $filePath"
+    echo ""
+
+    _confirmation || return 0
+
+    curl --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/upload/zip' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --form 'file=@"'"$filePath"'"'
+    
+    echo ""
+}
+
+upload_metadata(){ # UPLOAD A JSON FILE TO IPFS
+
+    local name image description attributes=() data_names=() data_values=() step=1
+
+    echo "Please enter the following parameters to upload the file to IPFS:"
+    echo "name image description (attributes) (data)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Name: " name -1 "true" 'true' "Name is required." ""
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Image: " image 1 "true" '[[ ${#input} -ge 46 ]]' \
+                    "Image is required." "Image must be longer."
+                [[ $? -eq 99 ]] && step=1 && continue
+                step=3
+                ;;
+            3)
+                _check_input "Description: " description 2 "true" 'true' "Description is required." ""
+                [[ $? -eq 99 ]] && step=2 && continue
+                break
+                ;;
+        esac
+    done
+
+    read -p "Add attributes? (Y/N): " add_attributes
+    if [[ "$add_attributes" =~ ^[Yy]$ ]]; then
+        local attr_count=1
+        while true; do
+            _check_input "Trait type for attribute $attr_count: " trait_type -1 "true" 'true' \
+                "Trait type is required." ""
+            
+            if [[ $? -eq 99 ]]; then
+                if [[ ${#attributes[@]} -gt 0 ]]; then
+                    attributes=("${attributes[@]:0:${#attributes[@]}-1}")
+                    ((attr_count--))
+                fi
+                continue
+            fi
+            
+            _check_input "Value for trait '$trait_type': " value attr_count "true" 'true' \
+                "Value is required for the trait." ""
+            
+            if [[ $? -eq 99 ]]; then
+                continue
+            fi
+            
+            if [[ "$value" =~ ^[0-9]+$ ]]; then
+                attributes+=("{\"trait_type\": \"$trait_type\", \"value\": $value}")
+            else
+                attributes+=("{\"trait_type\": \"$trait_type\", \"value\": \"$value\"}")
+            fi
+            
+            ((attr_count++))
+            
+            read -p "Add another attribute? (Y/N): " add_more
+            [[ ! "$add_more" =~ ^[Yy]$ ]] && break
+        done
+    fi
+
+    read -p "Add custom data? (Y/N): " add_data
+    if [[ "$add_data" =~ ^[Yy]$ ]]; then
+        local data_count=1
+        while true; do
+            _check_input "Data name: " dataName -1 "true" 'true' "Data name is required." ""
+            if [[ $? -eq 99 ]]; then
+                if [[ ${#data_names[@]} -gt 0 ]]; then
+                    data_names=("${data_names[@]:0:${#data_names[@]}-1}")
+                    data_values=("${data_values[@]:0:${#data_values[@]}-1}")
+                fi
+                continue
+            fi
+
+            _check_input "Value for '$dataName': " value data_count "true" 'true' "Value is required." ""
+            if [[ $? -eq 99 ]]; then continue; fi
+
+            data_names+=("$dataName")
+            data_values+=("$value")
+            ((data_count++))
+
+            read -p "Add another custom data field? (Y/N): " add_more
+            [[ ! "$add_more" =~ ^[Yy]$ ]] && break
+        done
+    fi
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Name: $name"
+    echo "Image: $image"
+    echo "Description: $description"
+    [[ ${#attributes[@]} -gt 0 ]] && echo "Attributes: ${attributes[*]}"
+    if [[ ${#data_names[@]} -gt 0 ]]; then
+        local data_display="{"
+        for ((i=0; i<${#data_names[@]}; i++)); do
+            if [[ "${data_values[i]}" =~ ^[0-9]+$ ]]; then
+                data_display+="\"${data_names[i]}\": ${data_values[i]}"
+            else
+                data_display+="\"${data_names[i]}\": \"${data_values[i]}\""
+            fi
+            [[ $i -lt $(( ${#data_names[@]} - 1 )) ]] && data_display+=", "
+        done
+        data_display+="}"
+        echo "Data: $data_display"
+    fi
+    echo ""
+
+    _confirmation || return 0
+
+    local attributes_json data_json
+    attributes_json=$(printf '%s\n' "${attributes[@]}" | jq -s '.')
+    data_json=$(jq -n '{data: {}}')
+    for ((i=0; i<${#data_names[@]}; i++)); do
+        if [[ "${data_values[i]}" =~ ^[0-9]+$ ]]; then
+            data_json=$(echo "$data_json" | jq --arg key "${data_names[i]}" --argjson val "${data_values[i]}" '.data[$key] = $val')
+        else
+            data_json=$(echo "$data_json" | jq --arg key "${data_names[i]}" --arg val "${data_values[i]}" '.data[$key] = $val')
+        fi
+    done
+
+    local data
+    data=$(jq -n \
+        --arg name "$name" \
+        --arg image "$image" \
+        --arg description "$description" \
+        --argjson attributes "$attributes_json" \
+        --argjson data "$data_json" \
+        '{
+            name: $name,
+            image: $image,
+            description: $description
+        } + 
+        (if $attributes != [] then {attributes: $attributes} else {} end) +
+        $data')
+
+    curl --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/metadata' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+
+##############
+### ERC-20 ###
+##############
+
+deploy20() { # DEPLOY AN ERC-20 SMART CONTRACT
+
+    local name symbol alias initialSupply network gasLimit step=1
+
+    echo "Please enter the following parameters to deploy the ERC-20 contract:"
+    echo "name symbol alias initialSupply network (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Name: " name -1 "true" 'true' "Name is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Symbol: " symbol 1 "true" 'true' "Symbol is required." ""
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Alias: " alias 2 "true" 'true' "Alias is required." ""
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Initial Supply: " initialSupply 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Initial Supply is required." "Initial Supply must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Network: " network 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                step=6
+                ;;
+            6)
+                _check_input "Gas Limit (optional): " gasLimit 5 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=5; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Name: $name"
+    echo "Symbol: $symbol"
+    echo "Alias: $alias"
+    echo "Initial Supply: $initialSupply"
+    echo "Network: $network"
+    [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg name "$name" \
+        --arg symbol "$symbol" \
+        --arg alias "$alias" \
+        --argjson initialSupply "$initialSupply" \
+        --argjson network "$network" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            name: $name,
+            symbol: $symbol,
+            alias: $alias,
+            initialSupply: $initialSupply,
+            network: $network
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/deploy' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transfer20(){ # TRANSFER TOKENS TO AN ADDRESS
+
+    local contractAddress recipient network amount gasLimit step=1
+
+    echo "Please enter the following parameters to make the token transfers:"
+    echo "contractAddress recipient network amount (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Recipient: " recipient 1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Recipient is required." "Recipient must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Network: " network 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Amount: " amount 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Gas Limit (optional): " gasLimit 4 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Recipient: $recipient"
+    echo "Network: $network"
+    echo "Amount: $amount"
+    if [ -n "$gasLimit" ]; then
+        echo "Gas Limit: $gasLimit"
+    fi
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --arg recipient "$recipient" \
+        --argjson network "$network" \
+        --argjson amount "$amount" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            contractAddress: $contractAddress,
+            recipient: $recipient,
+            network: $network,
+            amount: $amount
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/transfer' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transfer_from(){ # TRANSFER TOKENS FROM A SENDER'S ACCOUNT TO A RECEIVER'S ADDRESS
+
+    local contractAddress sender recipient network amount gasLimit step=1
+
+    echo "Please enter the following parameters to make the token transfers:"
+    echo "contractAddress sender recipient network amount (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Sender: " sender 1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Sender is required." "Sender must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Recipient: " recipient 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Recipient is required." "Recipient must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Network: " network 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Amount: " amount 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be an integer number."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                step=6
+                ;;
+            6)
+                _check_input "Gas Limit (optional): " gasLimit 5 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=5; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Sender: $sender"
+    echo "Recipient: $recipient"
+    echo "Network: $network"
+    echo "Amount: $amount"
+    if [ -n "$gasLimit" ]; then
+        echo "Gas Limit: $gasLimit"
+    fi
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --arg recipient "$recipient" \
+        --arg sender "$sender" \
+        --argjson network "$network" \
+        --argjson amount "$amount" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            contractAddress: $contractAddress,
+            recipient: $recipient,
+            sender: $sender,
+            network: $network,
+            amount: $amount
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/transferFrom' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+increase_allowance() { # GRANT A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMOUNT OF TOKENS
+
+    local contractAddress spender network addedValue gasLimit step=1
+
+    echo "Please enter the following parameters to grant the right to manage an amount of tokens:"
+    echo "contractAddress spender network addedValue (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Spender: " spender 1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Spender is required." "Spender must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Network: " network 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Added Value: " addedValue 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Added Value is required." "Added Value must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Gas Limit (optional): " gasLimit 4 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Spender: $spender"
+    echo "Network: $network"
+    echo "Added Value: $addedValue"
+    if [ -n "$gasLimit" ]; then
+        echo "Gas Limit: $gasLimit"
+    fi
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --arg spender "$spender" \
+        --argjson network "$network" \
+        --argjson addedValue "$addedValue" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            contractAddress: $contractAddress,
+            spender: $spender,
+            network: $network,
+            addedValue: $addedValue
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/increaseAllowance' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+decrease_allowance(){ # REVOKE A SPENDER ACCOUNT'S RIGHT TO MANAGE A SPECIFIED AMOUNT OF TOKENS
+
+    local contractAddress spender network substractedValue gasLimit step=1
+
+    echo "Please enter the following parameters to revoke the right to manage an amount of tokens:"
+    echo "contractAddress spender network substractedValue (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Spender: " spender 1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Spender is required." "Spender must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Network: " network 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Substracted Value: " substractedValue 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Substracted Value is required." "Substracted Value must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Gas Limit (optional): " gasLimit 4 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Spender: $spender"
+    echo "Network: $network"
+    echo "Substracted Value: $substractedValue"
+    if [ -n "$gasLimit" ]; then
+        echo "Gas Limit: $gasLimit"
+    fi
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --arg spender "$spender" \
+        --argjson network "$network" \
+        --argjson substractedValue "$substractedValue" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            contractAddress: $contractAddress,
+            spender: $spender,
+            network: $network,
+            substractedValue: $substractedValue
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/decreaseAllowance' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+allowance(){ # DISPLAY THE TOTAL AMOUNT OF TOKENS THE OWNER HAS AUTHORIZED THE SPENDER TO TRANSACT
+
+    local contractAddress network owner spender step=1
+
+    echo "Please enter the following parameters to display the amount of tokens authorized for the spender to transact:"
+    echo "contractAddress network owner spender"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Owner: " owner 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Owner is required." "Owner must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Spender: " spender 3 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Spender is required." "Spender must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Owner: $owner"
+    echo "Spender: $spender"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg owner "$owner" \
+        --arg spender "$spender" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            owner: $owner,
+            spender: $spender
+        }')
+
+    curl --location --request GET 'https://api.vottun.tech/erc/v1/erc20/allowance' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+name(){ # DISPLAY THE NAME OF A SMART CONTRACT
+
+    local contractAddress network step=1
+
+    echo "Please enter the following parameters to display the name of the smart contract:"
+    echo "contractAddress network"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/name' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+symbol(){ # DISPLAY THE SYMBOL OF A SMART CONTRACT
+
+    local contractAddress network step=1
+
+    echo "Please enter the following parameters to display the symbol of the smart contract:"
+    echo "contractAddress network"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+supply(){ # DISPLAY THE TOTAL SUPPLY OF TOKENS CREATED IN AN ERC-20 SMART CONTRACT
+
+    local contractAddress network step=1
+
+    echo "Please enter the following parameters to display the total supply of tokens created in the smart contract:"
+    echo "contractAddress network"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/totalSupply' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+decimals(){ # DISPLAY THE DECIMALS USED FOR TOKENS IN AN ERC-20 SMART CONTRACT
+
+    local contractAddress network step=1
+
+    echo "Please enter the following parameters to display the decimals used for tokens in the smart contract:"
+    echo "contractAddress network"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/decimals' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+balance20(){ # DISPLAY THE BALANCE OF TOKENS HELD BY AN ADDRESS
+
+    local contractAddress network address step=1
+
+    echo "Please enter the following parameters to display the balance of tokens held by the address:"
+    echo "contractAddress network address"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Address: " address 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Address: $address"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg address "$address" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            address: $address
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc20/balanceOf' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+
+###############
+### ERC-721 ###
+###############
+
+deploy721() { # DEPLOY AN ERC-721 SMART CONTRACT
+
+    local name symbol network alias gasLimit step=1
+
+    echo "Please enter the following parameters to deploy the ERC-721 contract:"
+    echo "name symbol network (alias) (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Name: " name -1 "true" 'true' "Name is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Symbol: " symbol 1 "true" 'true' "Symbol is required." ""
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Network: " network 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Alias (optional): " alias 3 "false" 'true' "" ""
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Gas Limit (optional): " gasLimit 4 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Name: $name"
+    echo "Symbol: $symbol"
+    echo "Network: $network"
+    [ -n "$alias" ] && echo "Alias: $alias"
+    [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg name "$name" \
+        --arg symbol "$symbol" \
+        --argjson network "$network" \
+        --arg alias "$alias" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            name: $name,
+            symbol: $symbol,
+            network: $network
+        } + 
+        (if $alias != "" then {alias: $alias} else {} end) + 
+        (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/deploy' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+mint721(){ # MINT AN NFT WITH THE PROVIDED METADATA TO THE SPECIFIED ADDRESS
+
+    local recipientAddress tokenId ipfsUri ipfsHash network contractAddress royaltyPercentage gasLimit step=1
+
+    echo "Please enter the following parameters to mint the NFT:"
+    echo "recipientAddress tokenId ipfsUri ipfsHash network contractAddress (royaltyPercentage) (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Recipient Address: " recipientAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Recipient Address is required." "Recipient Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Token ID: " tokenId 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "IPFS URI: " ipfsUri 2 "true" '[[ ${#input} -ge 46 ]]' \
+                    "IPFS URI is required." "The IPFS URI must be longer."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+
+                ipfsHash="${ipfsUri##*/}"
+                echo "IPFS Hash (autofilled): $ipfsHash"
+        
+                step=4
+                ;;
+            4)
+                _check_input "Network: " network 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Contract Address: " contractAddress 4 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                step=6
+                ;;
+            6)
+                _check_input "Royalty Percentage (optional): " royaltyPercentage 5 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Royalty Percentage must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=5; continue; fi
+                step=7
+                ;;
+            7)
+                _check_input "Gas Limit (optional): " gasLimit 6 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=6; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Recipient Address: $recipientAddress"
+    echo "Token ID: $tokenId"
+    echo "IPFS URI: $ipfsUri"
+    echo "IPFS Hash: $ipfsHash"
+    echo "Network: $network"
+    echo "Contract Address: $contractAddress"
+    [ -n "$royaltyPercentage" ] && echo "Royalty Percentage: $royaltyPercentage"
+    [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg recipientAddress "$recipientAddress" \
+        --argjson tokenId "$tokenId" \
+        --arg ipfsUri "$ipfsUri" \
+        --arg ipfsHash "$ipfsHash" \
+        --argjson network "$network" \
+        --arg contractAddress "$contractAddress" \
+        --arg royaltyPercentage "$royaltyPercentage" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            recipientAddress: $recipientAddress,
+            tokenId: $tokenId,
+            ipfsUri: $ipfsUri,
+            ipfsHash: $ipfsHash,
+            network: $network,
+            contractAddress: $contractAddress
+        } + 
+        (if $royaltyPercentage != "" then {royaltyPercentage: $royaltyPercentage | tonumber} else {} end) + 
+        (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/mint' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transfer721(){ # TRANSFER AN NFT TO AN ADDRESS
+
+    local contractAddress network id from to step=1
+
+    echo "Please enter the following parameters to transfer the NFT:"
+    echo "contractAddress network id from to"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Token ID: " id 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "From: " from 3 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "From is required." "From must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "To: " to 4 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Token ID: $id"
+    echo "From: $from"
+    echo "To: $to"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --argjson id "$id" \
+        --arg from "$from" \
+        --arg to "$to" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            id: $id,
+            from: $from,
+            to: $to
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/transfer' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+balance721(){ # DISPLAY THE NFT BALANCE OF AN ADDRESS IN THE SPECIFIED SMART CONTRACT AND NETWORK
+
+    local contractAddress network address step=1
+
+    echo "Please enter the following parameters to display the balance of NFTs held by the address:"
+    echo "contractAddress network address"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Address: " address 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Address: $address"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg address "$address" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            address: $address
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/balanceOf' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+uri721(){ # DISPLAY THE METADATA URI FOR AN NFT IN THE SPECIFIED CONTRACT
+
+    local contractAddress network id step=1
+
+    echo "Please enter the following parameters to display the metadata URI for the NFT:"
+    echo "contractAddress network id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Token ID: " id 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/tokenUri' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+owner(){ # DISPLAY THE ADDRESS OF THE OWNER OF AN NFT
+
+    local contractAddress network id step=1
+
+    echo "Please enter the following parameters to display the address of the owner of the NFT:"
+    echo "contractAddress network id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Token ID: " id 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc721/ownerOf' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+
+################
+### ERC-1155 ###
+################
+
+deploy1155(){ # DEPLOY AN ERC-1155 SMART CONTRACT
+
+    local name symbol ipfsUri royaltyRecipient royaltyValue network alias gasLimit step=1
+
+    echo "Please enter the following parameters to deploy the ERC-1155 contract:"
+    echo "name symbol ipfsUri royaltyRecipient royaltyValue network alias (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Name: " name -1 "true" 'true' "Name is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Symbol: " symbol 1 "true" 'true' "Symbol is required." ""
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "IPFS URI: " ipfsUri 2 "true" '[[ ${#input} -ge 46 ]]' \
+                    "IPFS URI is required." "The IPFS URI must be longer."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Royalty Recipient: " royaltyRecipient 3 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Royalty Recipient is required." "Royalty Recipient must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Royalty Value: " royaltyValue 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Royalty Value is required." "Royalty Value must be an integer number."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                step=6
+                ;;
+            6)
+                _check_input "Network: " network 5 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=5; continue; fi
+                step=7
+                ;;
+            7)
+                _check_input "Alias: " alias 6 "true" 'true' "Alias is required." ""
+                if [[ $? -eq 99 ]]; then step=6; continue; fi
+                step=8
+                ;;
+            8)
+                _check_input "Gas Limit (optional): " gasLimit 7 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=7; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Name: $name"
+    echo "Symbol: $symbol"
+    echo "IPFS URI: $ipfsUri"
+    echo "Royalty Recipient: $royaltyRecipient"
+    echo "Royalty Value: $royaltyValue"
+    echo "Network: $network"
+    echo "Alias: $alias"
+    [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg name "$name" \
+        --arg symbol "$symbol" \
+        --arg ipfsUri "$ipfsUri" \
+        --arg royaltyRecipient "$royaltyRecipient" \
+        --argjson royaltyValue "$royaltyValue" \
+        --argjson network "$network" \
+        --arg alias "$alias" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            name: $name,
+            symbol: $symbol,
+            ipfsUri: $ipfsUri,
+            royaltyRecipient: $royaltyRecipient,
+            royaltyValue: $royaltyValue,
+            network: $network,
+            alias: $alias
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/deploy' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+mint1155(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF AN NFT WITH THE PROVIDED METADATA TO THE GIVEN ADDRESS
+
+    local contractAddress network to id amount step=1
+
+    echo "Please enter the following parameters to mint a number of copies of an NFT to the address:"
+    echo "contractAddress network to id amount"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "To: " to 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Token ID: " id 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Amount: " amount 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be an integer number."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "To: $to"
+    echo "Token ID: $id"
+    echo "Amount: $amount"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg to "$to" \
+        --argjson id "$id" \
+        --argjson amount "$amount" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            to: $to,
+            id: $id,
+            amount: $amount
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/mint' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PROVIDED METADATA TO THE GIVEN ADDRESS
+
+    local contractAddress network to numNFTs ids=() amounts=() step=1
+
+    echo "Please enter the following parameters to mint an amount of copies of multiple NFTs to the address:"
+    echo "contractAddress network to ids amounts"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "To: " to 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "How much different NFTs do you want to mint? " numNFTs 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Number of different NFTs is required." "Please enter an integer value."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                if [[ "$numNFTs" -lt 2 || "$numNFTs" -gt 10 ]]; then
+                    echo "You can mint between 2 and 10 different NFTs in a single batch."
+                    continue
+                fi
+                step=5
+                ;;
+            5)
+                for ((i=1; i<=numNFTs; i++)); do
+                    while true; do
+                        _check_input "Token ID for NFT $i: " id $((3 + i)) "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                            "Token ID is required for NFT $i." "Token ID must be an integer number."
+                        if [[ $? -eq 99 ]]; then
+                            if [[ $i -gt 1 ]]; then
+                                i=$((i - 1))
+                                ids=("${ids[@]:0:${#ids[@]}-1}")
+                                amounts=("${amounts[@]:0:${#amounts[@]}-1}")
+                            fi
+                            continue
+                        fi
+                        ids+=("$id")
+
+                        _check_input "Amount for NFT $i: " amount $((4 + i)) "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                            "Amount is required for NFT $i." "Amount must be an integer number."
+                        if [[ $? -eq 99 ]]; then
+                            ids=("${ids[@]:0:${#ids[@]}-1}")
+                            continue
+                        fi
+                        amounts+=("$amount")
+                        break
+                    done
+                done
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "To: $to"
+    echo "Different NFTs in batch: $numNFTs"
+    for ((i=0; i<numNFTs; i++)); do
+        echo "Token ID $((i+1)): ${ids[i]}"
+        echo "Amount $((i+1)): ${amounts[i]}"
+    done
+    echo ""
+
+    _confirmation || return 0
+
+    local ids_json=$(printf '%s\n' "${ids[@]}" | jq -s '.')
+    local amounts_json=$(printf '%s\n' "${amounts[@]}" | jq -s '.')
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg to "$to" \
+        --argjson ids "$ids_json" \
+        --argjson amounts "$amounts_json" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            to: $to,
+            ids: $ids,
+            amounts: $amounts
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/mintbatch' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transfer1155(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF AN NFT TO THE GIVEN ADDRESS
+
+    local contractAddress network to id amount step=1
+
+    echo "Please enter the following parameters to transfer a number of copies of an NFT to the address:"
+    echo "contractAddress network to id amount"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "To: " to 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Token ID: " id 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Amount: " amount 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be an integer number."
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "To: $to"
+    echo "Token ID: $id"
+    echo "Amount: $amount"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg to "$to" \
+        --argjson id "$id" \
+        --argjson amount "$amount" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            to: $to,
+            id: $id,
+            amount: $amount
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/transfer' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transfer_batch(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS TO THE GIVEN ADDRESS
+
+    local contractAddress network to numNFTs ids=() amounts=() step=1
+
+    echo "Please enter the following parameters to transfer an amount of copies of multiple NFTs to the address:"
+    echo "contractAddress network to ids amounts"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "To: " to 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "How much different NFTs do you want to transfer? " numNFTs 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Number of different NFTs is required." "Please enter an integer value."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                if [[ "$numNFTs" -lt 2 || "$numNFTs" -gt 10 ]]; then
+                    echo "You can transfer between 2 and 10 different NFTs in a single batch."
+                    continue
+                fi
+                step=5
+                ;;
+            5)
+                for ((i=1; i<=numNFTs; i++)); do
+                    while true; do
+                        _check_input "Token ID for NFT $i: " id $((3 + i)) "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                            "Token ID is required for NFT $i." "Token ID must be an integer number."
+                        if [[ $? -eq 99 ]]; then
+                            if [[ $i -gt 1 ]]; then
+                                i=$((i - 1))
+                                ids=("${ids[@]:0:${#ids[@]}-1}")
+                                amounts=("${amounts[@]:0:${#amounts[@]}-1}")
+                            fi
+                            continue
+                        fi
+                        ids+=("$id")
+
+                        _check_input "Amount for NFT $i: " amount $((4 + i)) "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                            "Amount is required for NFT $i." "Amount must be an integer number."
+                        if [[ $? -eq 99 ]]; then
+                            ids=("${ids[@]:0:${#ids[@]}-1}")
+                            continue
+                        fi
+                        amounts+=("$amount")
+                        break
+                    done
+                done
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "To: $to"
+    echo "Different NFTs in batch: $numNFTs"
+    for ((i=0; i<numNFTs; i++)); do
+        echo "Token ID $((i+1)): ${ids[i]}"
+        echo "Amount $((i+1)): ${amounts[i]}"
+    done
+    echo ""
+
+    _confirmation || return 0
+
+    local ids_json=$(printf '%s\n' "${ids[@]}" | jq -s '.')
+    local amounts_json=$(printf '%s\n' "${amounts[@]}" | jq -s '.')
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg to "$to" \
+        --argjson ids "$ids_json" \
+        --argjson amounts "$amounts_json" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            to: $to,
+            ids: $ids,
+            amounts: $amounts
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/transferBatch' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+balance1155(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CONTRACT ON A SPECIFIED NETWORK
+
+    local contractAddress network address id step=1
+
+    echo "Please enter the following parameters to display the amount of an NFT for the address:"
+    echo "contractAddress network address id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Address: " address 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Token ID: " id 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Address: $address"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg address "$address" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            address: $address,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/balanceOf' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+uri1155(){ # DISPLAY THE URI OF THE METADATA FOR THE NFT FROM THE GIVEN CONTRACT
+
+    local contractAddress network id step=1
+
+    echo "Please enter the following parameters to display the URI of the metadata for the NFT from the contract:"
+    echo "contractAddress network id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Token ID: " id 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/tokenUri' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+
+############
+### POAP ###
+############
+
+deployPOAP(){ # DEPLOY A POAP SMART CONTRACT AND MINT THE TOKENS
+
+    local name amount ipfsUri network alias gasLimit step=1
+
+    echo "Please enter the following parameters to deploy the POAP contract:"
+    echo "name amount ipfsUri network alias (gasLimit)"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Name: " name -1 "true" 'true' "Name is required." ""
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Amount: " amount 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "IPFS URI: " ipfsUri 2 "true" '[[ ${#input} -ge 46 ]]' \
+                    "IPFS URI is required." "The IPFS URI must be longer."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Network: " network 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                step=5
+                ;;
+            5)
+                _check_input "Alias: " alias 4 "true" 'true' "Alias is required." ""
+                if [[ $? -eq 99 ]]; then step=4; continue; fi
+                step=6
+                ;;
+            6)
+                _check_input "Gas Limit (optional): " gasLimit 5 "false" '[[ "$input" =~ ^[0-9]+$ || -z "$input" ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                if [[ $? -eq 99 ]]; then step=5; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Name: $name"
+    echo "Amount: $amount"
+    echo "IPFS URI: $ipfsUri"
+    echo "Network: $network"
+    echo "Alias: $alias"
+    [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg name "$name" \
+        --argjson amount "$amount" \
+        --arg ipfsUri "$ipfsUri" \
+        --argjson network "$network" \
+        --arg alias "$alias" \
+        --arg gasLimit "$gasLimit" \
+        '{
+            name: $name,
+            amount: $amount,
+            ipfsUri: $ipfsUri,
+            network: $network,
+            alias: $alias
+        } + (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+
+    curl --location 'https://api.vottun.tech/erc/v1/poap/deploy' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+transferPOAP(){ # TRANSFER AN NFT TO THE GIVEN ADDRESS
+
+    local contractAddress network to id step=1
+
+    echo "Please enter the following parameters to transfer an NFT to the address:"
+    echo "contractAddress network to id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "To: " to 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "To is required." "To must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Token ID: " id 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "To: $to"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg to "$to" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            to: $to,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/poap/transfer' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+balancePOAP(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CONTRACT ON A SPECIFIED NETWORK
+
+    local contractAddress network address id step=1
+
+    echo "Please enter the following parameters to display the amount of the NFT for the address:"
+    echo "contractAddress network address id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Address: " address 2 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                step=4
+                ;;
+            4)
+                _check_input "Token ID: " id 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=3; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Address: $address"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --arg address "$address" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            address: $address,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/poap/balanceOf' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}
+
+uriPOAP(){ # DISPLAY THE URI OF THE METADATA FOR THE NFT FROM THE GIVEN CONTRACT
+
+    local contractAddress network id step=1
+
+    echo "Please enter the following parameters to display the URI of the metadata for the NFT from the contract:"
+    echo "contractAddress network id"
+    echo ""
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" \
+                    '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                if [[ $? -eq 99 ]]; then continue; fi
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                if [[ $? -eq 99 ]]; then step=1; continue; fi
+                step=3
+                ;;
+            3)
+                _check_input "Token ID: " id 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Token ID is required." "Token ID must be an integer number."
+                if [[ $? -eq 99 ]]; then step=2; continue; fi
+                break
+                ;;
+        esac
+    done
+
+    echo ""
+    echo "You've entered the following parameters:"
+    echo "Contract Address: $contractAddress"
+    echo "Network: $network"
+    echo "Token ID: $id"
+    echo ""
+
+    _confirmation || return 0
+
+    local data
+    data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --argjson network "$network" \
+        --argjson id "$id" \
+        '{
+            contractAddress: $contractAddress,
+            network: $network,
+            id: $id
+        }')
+
+    curl --location 'https://api.vottun.tech/erc/v1/erc1155/tokenUri' \
+    --header 'x-application-vkn: '$APP_ID'' \
+    --header 'Authorization: Bearer '$API_KEY'' \
+    --header 'Content-Type: application/json' \
+    --data-raw "$data"
+
+    echo ""
+}

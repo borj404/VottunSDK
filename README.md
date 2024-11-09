@@ -1,39 +1,41 @@
-This SDK has been developed so that users of Unix-like systems can easily run the Vottun APIs from the terminal.
+This CLI tool for Unix-like systems provides a straightforward way to interact with Vottun APIs from the terminal.
 
-Change the content of lines 5-6 between "" with your own App ID and API key.
-You can easily obtain them accessing your [Vottun account](https://app.vottun.io/).
+Feel free to modify the script to suit your needs.
 
-Feel free to make any modifications you consider pertinent in order to adapt it to your needs.
+## Prerequisites
 
-Please let me know if you encounter any errors or issues while running this script.
+Ensure that both _curl_ and _jq_ are installed on your system.
 
-## To run it
+## Setup
 
-First go to the script path and give it execution permissions:
+Replace the content in lines 3-4 (between "") with your own _App ID_ and _API key_, which you can easily obtain by accessing your [Vottun account](https://app.vottun.io/).
 
-```
-chmod +x vottun_sdk.sh
-```
+## Running the script
 
-Then run it:
+Navigate to the script’s location, make it executable, and run it:
 
 ```
-./vottun_sdk.sh
+chmod +x vottun-cli
+
+./vottun-cli
 ```
+
 ### Or
 
-It can also be executed directly within the current shell environment:
+Run within the current shell environment:
 
 ```
-source vottun_sdk.sh
+source vottun-cli
 ```
 
 ## Menu & Docs
 
-Type "help" to show the help menu with all available functions.
+After launching the script, type _help_ to view the list of available functions.
 
-For detailed information about the APIs included in this script check the [documentation](https://docs.vottun.io/).
+For detailed information about the APIs included in this script, refer to the [documentation](https://docs.vottun.io/).
 
 ## Support
 
-For any questions contact me through [Discord](https://discord.com/users/1206334838093643817).
+If you encounter any errors or bugs while running this script, please let me know.
+
+For any issues or questions, contact me on [Discord](https://discord.com/users/1206334838093643817).

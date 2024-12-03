@@ -8,7 +8,9 @@ Ensure that both _curl_ and _jq_ are installed on your system.
 
 ## Setup
 
-Replace the content in lines 3-4 (between "") with your own _App ID_ and _API key_, which you can easily obtain by accessing your [Vottun account](https://app.vottun.io/).
+Replace the content in lines 3-4 (between the quotation marks) with your own _App ID_ and _API key_, which you can easily obtain by accessing your [Vottun account](https://app.vottun.io/).
+
+Enter your _email_ on line 5 to use the Custodied Wallets functions.
 
 ## Running the script
 
@@ -39,3 +41,100 @@ For detailed information about the APIs included in this script, refer to the [d
 If you encounter any errors or bugs while running this script, please let me know.
 
 For any issues or questions, contact me on [Discord](https://discord.com/users/1206334838093643817).
+
+## Functions list
+
+### IPFS
+
+__up_file__: Upload a binary file to IPFS.
+
+__up_folder__: Upload a folder or zip with multiple files to IPFS.
+
+__up_metadata__: Upload a JSON file to IPFS.
+
+### ERC-20
+
+__deploy20__: Deploy an ERC-20 smart contract.
+
+__transfer20__: Transfer tokens to an address.
+
+__transfer_from__: Transfer tokens from a sender's account to a receiver's address.
+
+__incr_allowance__: Grant a spender account the right to manage a specified amount of tokens.
+
+__decr_allowance__: Revoke a spender account the right to manage a specified amount of tokens.
+
+__allowance__: Display the total amount of tokens the owner has authorized the spender to transact.
+
+__name__: Display the name of a smart contract.
+
+__symbol__: Display the symbol of a smart contract.
+
+__supply__: Display the total supply of tokens created in an ERC-20 smart contract.
+
+__decimals__: Display the decimals used for tokens in an ERC-20 smart contract.
+
+__balance20__: Display the balance of tokens held by an address.
+
+### ERC-721
+
+__deploy721__: Deploy an ERC-721 smart contract.
+
+__mint721__: Mint an NFT with the provided metadata to the specified address.
+
+__transfer721__: Transfer an NFT to an address.
+
+__balance721__: Display the NFT balance of an address in the specified smart contract and network.
+
+__uri721__: Display the metadata URI for an NFT in the specified contract.
+
+__owner__: Display the address of the owner of an NFT.
+
+### ERC-1155
+
+__deploy1155__: Deploy an ERC-1155 smart contract.
+
+__mint1155__: Mint the specified amount of copies of an NFT with the provided metadata to the given address.
+
+__mint_batch__: Mint the specified amount of copies of multiple NFTs with the provided metadata to the given address.
+
+__transfer1155__: Transfer the specified amount of copies of an NFT to the given address.
+
+__transfer_batch__: Transfer the specified amount of copies of multiple NFTs to the given address.
+
+__balance1155__: Display the amount of an NFT for the given address and smart contract on a specified network.
+
+__uri1155__: Display the URI of the metadata for the NFT from the given contract.
+
+### POAP
+
+__deployPOAP__: Deploy a POAP smart contract and mint the tokens.
+
+__transferPOAP__: Transfer an NFT to the given address.
+
+__balancePOAP__: Display the amount of an NFT for the given address and smart contract on a specified network.
+
+__uriPOAP__: Display the URI of the metadata for the NFT from the given contract.
+
+### Custodied Wallets
+
+__new_wallet__: Generates a one-time-use hash and retrieves the URL to create a new custodied wallet.
+
+__get_address__: Retrieve the wallet's public address (for the 1st account) for one of our users.
+
+__get_wallets__: Retrieve all custodied wallets created for you.
+
+__otp__: Request a one-time email OTP to sign a mutable transaction within the next 120 seconds.
+
+__send_tx__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use "query").
+
+__send_nat__: Transfer native assets from your custodied wallet.
+
+
+### Web3 core
+
+__call_function__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use "query").
+
+__query__: Call any public function implemented in a smart contract without change its state (view or pure functions).
+
+More functions coming soon...

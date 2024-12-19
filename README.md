@@ -30,6 +30,20 @@ Run within the current shell environment:
 source vottun-cli
 ```
 
+## Usage
+
+Type the function and fill in the required parameters.
+
+Press __⏎__ after each prompt to continue.
+
+To undo the previous entry type __<<__ , __..__ , __!undo__ , __!back__ or __!del__
+
+"All parameter inputs are handled dynamically, so you must ***not*** quote strings, even in arrays."
+
+(Optional parameters are indicated in parentheses.)
+
+All token amounts must be entered in standard units (without 18 decimals), not in wei as stated in the docs (e.g: 0.1, not 100,000,000,000,000,000).
+
 ## Menu & Docs
 
 After launching the script, type _help_ to view the list of available functions.
@@ -126,15 +140,37 @@ __get_wallets__: Retrieve all custodied wallets created for you.
 
 __otp__: Request a one-time email OTP to sign a mutable transaction within the next 120 seconds.
 
-__send_tx__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use "query").
+__send_tx__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use _query_).
 
 __send_nat__: Transfer native assets from your custodied wallet.
 
 
 ### Web3 core
 
-__call_function__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use "query").
+__deploy__: Deploy a smart contract on the blockchain of your choice.
+
+__call_function__: Call any public function implemented in a smart contract and modify its state (for view or pure functions, use _query_).
 
 __query__: Call any public function implemented in a smart contract without change its state (view or pure functions).
 
-More functions coming soon...
+__get_nets__: Request the list of available blockchain networks.
+
+__get_specs__: Request the list of available contract specifications.
+
+__query_address__: Query an address to determine if it is a smart contract.
+
+__query_tx__: Query transaction information from the blockchain.
+
+__query_status__: Query the status of a transaction.
+
+__query_ref__: Query the status of a transaction using the customer reference.
+
+__query_gas__: Query the current gas price for a specified blockchain network.
+
+__query_nat__: Query the balance of native currency for a specified address.
+
+__gas_deploy__: Estimate the gas required for a smart contract deployment.
+
+__gas_tx__: Estimate the gas required to call any public function implemented in a smart contract.
+
+__gas_nat__: Estimate the gas required to transfer native assets.

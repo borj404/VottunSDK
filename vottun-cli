@@ -6,11 +6,11 @@ email="HERE YOUR EMAIL" # ONLY REQUIRED TO USE CUSTODIED WALLETS FUNCTIONS
 
 cat << banner
 
-░░░░░░░██╗░█████╗░████████████████╗██╗░░░░░░███╗░░██╗ ░█▀▀█ ▒█▀▀█ ▀█▀ █▀▀
-██╗░░░██╔╝██╔══██╗╚══██╔═════██╔══╝██║░░░██╗████╗░██║ ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
-╚██╗░██╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║ ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
+░░░░░░░██╗░█████╗░████████████████╗██╗░░░░░░███╗░░██╗  ░█▀▀█ ▒█▀▀█ ▀█▀ █▀▀
+██╗░░░██╔╝██╔══██╗╚══██╔═════██╔══╝██║░░░██╗████╗░██║  ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
+╚██╗░██╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║  ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
 ░╚████╔╝░░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██║╚████║
-░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.4.0
+░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.5.0
 ░░░╚═╝░░░░░╚════╝░░░░╚═╝░░░░░╚═╝░░░░╚═════╝░╚═╝░░╚══╝ Scripted by @borj404
 
 banner
@@ -21,8 +21,10 @@ cat << menu
 
 Type the function and fill in the required parameters
 Press ⏎ after each prompt to continue
-To undo the previous entry, type " << , .. , !undo , !back or !del "
+To undo the previous entry type << , .. , !undo , !back or !del
+"All parameter inputs are handled dynamically, so you must NOT quote strings, even in arrays"
 (Optional parameters are indicated in parentheses)
+All token amounts must be entered in standard units, not in wei as stated in the docs
 
 For detailed information about this APIs, visit: https://docs.vottun.io/
 
@@ -78,8 +80,20 @@ CUSTODIED WALLETS
 ~$ send_nat ―▸ Transfer native assets from your custodied wallet
 
 WEB3 CORE
+~$ deploy ―▸ Deploy a smart contract on the blockchain of your choice
 ~$ call_function ―▸ Call any public function implemented in a smart contract and modify its state (for view or pure functions, use "query")
 ~$ query ―▸ Call any public function implemented in a smart contract without change its state (view or pure functions)
+~$ get_nets ―▸ Request the list of available blockchain networks
+~$ get_specs ―▸ Request the list of available contract specifications
+~$ query_address ―▸ Query an address to determine if it is a smart contract
+~$ query_tx ―▸ Query transaction information from the blockchain
+~$ query_status ―▸ Query the status of a transaction
+~$ query_ref ―▸ Query the status of a transaction using the customer reference
+~$ query_gas ―▸ Query the current gas price for a specified blockchain network
+~$ query_nat ―▸ Query the balance of native currency for a specified address
+~$ gas_deploy ―▸ Estimate the gas required for a smart contract deployment
+~$ gas_tx ―▸ Estimate the gas required to call any public function implemented in a smart contract
+~$ gas_nat ―▸ Estimate the gas required to transfer native assets
 
 menu
 }
@@ -125,7 +139,7 @@ _step_back() {
 
 _confirmation() {
     while true; do
-        read -p "Do you want to proceed with these parameters? (Y/N): " confirm
+        read -e -p "Do you want to proceed with these parameters? (Y/N): " confirm
         [[ "$confirm" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && return 99
         case "$confirm" in
             [Yy]*)
@@ -190,6 +204,12 @@ _network_details() {
             url_address="https://explorer.testnet.rootstock.io/address/"
             url_tx="https://explorer.testnet.rootstock.io/tx/"
             ;;
+        51)
+            net_name="XDC Apothem Network"
+            currency="TXDC"
+            url_address="https://explorer.apothem.network/address/"
+            url_tx="https://explorer.apothem.network/tx/"
+            ;;
 
         # MAINNET
         1)
@@ -235,6 +255,12 @@ _network_details() {
             currency="RBTC"
             url_address="https://explorer.rootstock.io/address/"
             url_tx="https://explorer.rootstock.io/tx/"
+            ;;
+        50)
+            net_name="XDC Network"
+            currency="XDC"
+            url_address="https://xdc.network/address/"
+            url_tx="https://xdc.network/txs/"
             ;;
         *)
             net_name="Network name not defined :("
@@ -286,14 +312,14 @@ up_file(){ # UPLOAD A BINARY FILE TO IPFS
                 echo "Filename: $filename"
                 echo -e "File Path: $filePath\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=2 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
     done
 
-    local response=$(curl --silent --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/upload' \
-        "${auth[@]}" \
+    local response=$(curl --silent --location --request POST \
+        'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/upload' "${auth[@]}" \
         --header 'Content-Type: multipart/form-data' \
         --form 'filename="'"$filename"'"' \
         --form 'file=@"'"$filePath"'"')
@@ -326,8 +352,8 @@ up_folder(){ # UPLOAD A FOLDER OR ZIP WITH MULTIPLE FILES TO IPFS
         _confirmation && break || [[ $? -eq 99 ]] || return 1
     done
 
-    local response=$(curl --silent --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/upload/zip' \
-        "${auth[@]}" \
+    local response=$(curl --silent --location --request POST \
+        'https://ipfsapi-v2.vottun.tech/ipfs/v2/upload/zip' "${auth[@]}" \
         --header 'Content-Type: multipart/form-data' \
         --form 'file=@"'"$filePath"'"')
 
@@ -368,35 +394,31 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
                 ;;
             5)
                 attributes=()
-                local attr_count=1
-                
+                local attr_count=1              
                 while true; do
-                    read -p "Add attributes? (Y/N): " add_attributes
+                    read -e -p "Add attributes? (Y/N): " add_attributes
                     [[ "$add_attributes" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && step=4 && break
                     [[ -z "$add_attributes" ]] && step=6 && break
                     [[ "$add_attributes" =~ ^[Yy]$ ]] && {
                         while true; do
-                            read -p "Trait type for attribute $attr_count: " trait_type
+                            read -e -p "Trait type for attribute $attr_count: " trait_type
                             [[ -z "$trait_type" ]] && echo "Trait type is required!" && continue
                             [[ "$trait_type" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                 (( attr_count > 1 )) && attributes=("${attributes[@]:0:${#attributes[@]}-1}") && ((attr_count--)) && continue
                                 break
-                            }
-                            
+                            }                          
                             while true; do
-                                read -p "Value for trait '$trait_type': " value
+                                read -e -p "Value for trait '$trait_type': " value
                                 [[ -z "$value" ]] && echo "Value is required for the trait!" && continue
                                 [[ "$value" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                     (( attr_count > 1 )) && attributes=("${attributes[@]:0:${#attributes[@]}-1}") && ((attr_count--)) && continue 2
-                                }
-                                
+                                }                               
                                 [[ "$value" =~ ^[0-9]+$ ]] && attributes+=("{\"trait_type\": \"$trait_type\", \"value\": $value}") || attributes+=("{\"trait_type\": \"$trait_type\", \"value\": \"$value\"}")
                                 ((attr_count++))
                                 break
-                            done
-                            
+                            done                           
                             while true; do
-                                read -p "Add another attribute? (Y/N): " add_more
+                                read -e -p "Add another attribute? (Y/N): " add_more
                                 [[ "$add_more" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                     (( attr_count > 1 )) && attributes=("${attributes[@]:0:${#attributes[@]}-1}") && ((attr_count--)) && continue 2
                                     break 2
@@ -412,17 +434,15 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
                 done
                 ;;
             6)
-                data_names=()
-                data_values=()
+                data_names=() data_values=()
                 local data_count=1
-
                 while true; do
-                    read -p "Add custom data? (Y/N): " add_data
+                    read -e -p "Add custom data? (Y/N): " add_data
                     [[ "$add_data" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && step=5 && break
                     [[ -z "$add_data" ]] && step=7 && break
                     [[ "$add_data" =~ ^[Yy]$ ]] && {
                         while true; do
-                            read -p "Data name $data_count: " dataName
+                            read -e -p "Data name $data_count: " dataName
                             [[ -z "$dataName" ]] && echo "Data name is required!" && continue
                             [[ "$dataName" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                 (( data_count > 1 )) && {
@@ -433,9 +453,8 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
                                 }
                                 break
                             }
-
                             while true; do
-                                read -p "Value for '$dataName': " value
+                                read -e -p "Value for '$dataName': " value
                                 [[ -z "$value" ]] && echo "Value is required for the data name!" && continue
                                 [[ "$value" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                     (( data_count > 1 )) && {
@@ -445,15 +464,13 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
                                     }
                                     continue 2
                                 }
-
                                 data_names+=("$dataName")
                                 data_values+=("$value")
                                 ((data_count++))
                                 break
                             done
-
                             while true; do
-                                read -p "Add another custom data field? (Y/N): " add_more
+                                read -e -p "Add another custom data field? (Y/N): " add_more
                                 [[ "$add_more" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                                     (( data_count > 1 )) && {
                                         data_names=("${data_names[@]:0:${#data_names[@]}-1}")
@@ -495,7 +512,7 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
                 fi
                 echo
                 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -527,9 +544,8 @@ up_metadata(){ # UPLOAD A JSON FILE TO IPFS
         (if $attributes != [] then {attributes: $attributes} else {} end) +
         $data')
 
-    local response=$(curl --silent --location 'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/metadata' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://ipfsapi-v2.vottun.tech/ipfs/v2/file/metadata' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     _loading
     echo -e "\nServer response:\n$response"
@@ -565,10 +581,10 @@ deploy20() { # DEPLOY AN ERC-20 SMART CONTRACT
                 step=4
                 ;;
             4)
-                _check_input "Initial Supply: " initialSupply 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Initial Supply is required." "Initial Supply must be an integer number."
+                _check_input "Initial Supply: " initialSupply 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Initial Supply is required." "Initial Supply must be a valid integer or decimal."
                 _step_back && continue
-                displaySupply=$(echo "scale=18; $initialSupply/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                initialSupply_wei=$(echo "$initialSupply * 10^18 / 1" | bc)
                 step=5
                 ;;
             5)
@@ -589,12 +605,12 @@ deploy20() { # DEPLOY AN ERC-20 SMART CONTRACT
                 echo "Name: $name"
                 echo "Symbol: $symbol"
                 echo "Alias: $alias"
-                echo "Initial Supply: $displaySupply"
+                echo "Initial Supply: $initialSupply"
                 echo "Network: $net_name"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -612,13 +628,11 @@ deploy20() { # DEPLOY AN ERC-20 SMART CONTRACT
             alias: $alias,
             network: $network
         } + 
-        (if $gasLimit != "" then {gasLimit: ($gasLimit | tonumber)} else {} end)')
-   
-    data=$(echo "$data" | sed "s/^{/{\"initialSupply\":$initialSupply, /")
+        (if $gasLimit != "" then {gasLimit: ($gasLimit | tonumber)} else {} end)')  
+    data=$(echo "$data" | sed "s/^{/{\"initialSupply\":$initialSupply_wei, /")
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/deploy' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc20/deploy' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -659,10 +673,10 @@ transfer20(){ # TRANSFER TOKENS TO AN ADDRESS
                 step=4
                 ;;
             4)
-                _check_input "Amount: " amount 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Amount is required." "Amount must be an integer number."
+                _check_input "Amount: " amount 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be a valid integer or decimal."
                 _step_back && continue
-                displayAmount=$(echo "scale=18; $amount/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                amount_wei=$(echo "$amount * 10^18 / 1" | bc)
                 step=5
                 ;;
             5)
@@ -677,11 +691,11 @@ transfer20(){ # TRANSFER TOKENS TO AN ADDRESS
                 echo "Contract Address: $contractAddress"
                 echo "Recipient: $recipient"
                 echo "Network: $net_name"
-                echo "Amount: $displayAmount"
+                echo "Amount: $amount"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -698,18 +712,16 @@ transfer20(){ # TRANSFER TOKENS TO AN ADDRESS
             network: $network
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+    data=$(echo "$data" | sed "s/^{/{\"amount\":$amount_wei, /")
 
-    data=$(echo "$data" | sed "s/^{/{\"amount\":$amount, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/transfer' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc20/transfer' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
 
     if [[ -n "$txHash" ]]; then
-        local symbol_query=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+        local symbol_query=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/symbol' \
             "${auth[@]}" $ct_json \
             --data-raw '{
                 "contractAddress": "'"$contractAddress"'",
@@ -717,7 +729,7 @@ transfer20(){ # TRANSFER TOKENS TO AN ADDRESS
             }')
 
         symbol=$(echo "$symbol_query" | jq -r '.symbol // empty')
-        echo -e "\nSending: $displayAmount $symbol\nto: $recipient"
+        echo -e "\nSending: $amount $symbol\nto: $recipient"
         _loading
         [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
     fi
@@ -757,10 +769,10 @@ transfer_from(){ # TRANSFER TOKENS FROM A SENDER'S ACCOUNT TO A RECEIVER'S ADDRE
                 step=5
                 ;;
             5)
-                _check_input "Amount: " amount 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Amount is required." "Amount must be an integer number."
+                _check_input "Amount: " amount 4 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be a valid integer or decimal."
                 _step_back && continue
-                displayAmount=$(echo "scale=18; $amount/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                amount_wei=$(echo "$amount * 10^18 / 1" | bc)
                 step=6
                 ;;
             6)
@@ -776,11 +788,11 @@ transfer_from(){ # TRANSFER TOKENS FROM A SENDER'S ACCOUNT TO A RECEIVER'S ADDRE
                 echo "Sender: $sender"
                 echo "Recipient: $recipient"
                 echo "Network: $net_name"
-                echo "Amount: $displayAmount"
+                echo "Amount: $amount"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -799,18 +811,16 @@ transfer_from(){ # TRANSFER TOKENS FROM A SENDER'S ACCOUNT TO A RECEIVER'S ADDRE
             network: $network
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+    data=$(echo "$data" | sed "s/^{/{\"amount\":$amount_wei, /")
 
-    data=$(echo "$data" | sed "s/^{/{\"amount\":$amount, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/transferFrom' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc20/transferFrom' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
 
     if [[ -n "$txHash" ]]; then
-        local symbol_query=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+        local symbol_query=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/symbol' \
             "${auth[@]}" $ct_json \
             --data-raw '{
                 "contractAddress": "'"$contractAddress"'",
@@ -818,7 +828,7 @@ transfer_from(){ # TRANSFER TOKENS FROM A SENDER'S ACCOUNT TO A RECEIVER'S ADDRE
             }')
 
         symbol=$(echo "$symbol_query" | jq -r '.symbol // empty')
-        echo -e "\nSending: $displayAmount $symbol\nfrom: $sender\nto: $recipient"
+        echo -e "\nSending: $amount $symbol\nfrom: $sender\nto: $recipient"
         _loading
         [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
     fi
@@ -852,10 +862,10 @@ incr_allowance() { # GRANT A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
                 step=4
                 ;;
             4)
-                _check_input "Added Value: " addedValue 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Added Value is required." "Added Value must be an integer number."
+                _check_input "Added Value: " addedValue 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Added Value is required." "Added Value must be a valid integer or decimal."
                 _step_back && continue
-                displayAdded=$(echo "scale=18; $addedValue/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                addedValue_wei=$(echo "$addedValue * 10^18 / 1" | bc)
                 step=5
                 ;;
             5)
@@ -870,11 +880,11 @@ incr_allowance() { # GRANT A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
                 echo "Contract Address: $contractAddress"
                 echo "Spender: $spender"
                 echo "Network: $net_name"
-                echo "Added Value: $displayAdded"
+                echo "Added Value: $addedValue"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -892,18 +902,16 @@ incr_allowance() { # GRANT A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
             network: $network
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+    data=$(echo "$data" | sed "s/^{/{\"addedValue\":$addedValue_wei, /")
 
-    data=$(echo "$data" | sed "s/^{/{\"addedValue\":$addedValue, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/increaseAllowance' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc20/increaseAllowance' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
 
     if [[ -n "$txHash" ]]; then
-        local symbol_query=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+        local symbol_query=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/symbol' \
             "${auth[@]}" $ct_json \
             --data-raw '{
                 "contractAddress": "'"$contractAddress"'",
@@ -911,7 +919,7 @@ incr_allowance() { # GRANT A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
             }')
 
         symbol=$(echo "$symbol_query" | jq -r '.symbol // empty')
-        echo -e "\nIncreasing allowance to: $displayAdded $symbol\nfor: $spender"
+        echo -e "\nIncreasing allowance to: $addedValue $symbol\nfor: $spender"
         _loading
         [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
     fi
@@ -945,10 +953,10 @@ decr_allowance(){ # REVOKE A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
                 step=4
                 ;;
             4)
-                _check_input "Substracted Value: " substractedValue 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Substracted Value is required." "Substracted Value must be an integer number."
+                _check_input "Substracted Value: " substractedValue 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Substracted Value is required." "Substracted Value must be a valid integer or decimal."
                 _step_back && continue
-                displaySubstracted=$(echo "scale=18; $substractedValue/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                substractedValue_wei=$(echo "$substractedValue * 10^18 / 1" | bc)
                 step=5
                 ;;
             5)
@@ -963,11 +971,11 @@ decr_allowance(){ # REVOKE A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
                 echo "Contract Address: $contractAddress"
                 echo "Spender: $spender"
                 echo "Network: $net_name"
-                echo "Substracted Value: $displaySubstracted"
+                echo "Substracted Value: $substractedValue"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -984,18 +992,16 @@ decr_allowance(){ # REVOKE A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
             network: $network
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
+    data=$(echo "$data" | sed "s/^{/{\"substractedValue\":$substractedValue_wei, /")
 
-    data=$(echo "$data" | sed "s/^{/{\"substractedValue\":$substractedValue, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/decreaseAllowance' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc20/decreaseAllowance' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
 
     if [[ -n "$txHash" ]]; then
-        local symbol_query=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+        local symbol_query=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/symbol' \
             "${auth[@]}" $ct_json \
             --data-raw '{
                 "contractAddress": "'"$contractAddress"'",
@@ -1003,7 +1009,7 @@ decr_allowance(){ # REVOKE A SPENDER ACCOUNT THE RIGHT TO MANAGE A SPECIFIED AMO
             }')
 
         symbol=$(echo "$symbol_query" | jq -r '.symbol // empty')
-        echo -e "\nDecreasing allowance to: $displaySubstracted $symbol\nfor: $spender"
+        echo -e "\nDecreasing allowance to: $substractedValue $symbol\nfor: $spender"
         _loading
         [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
     fi
@@ -1050,7 +1056,7 @@ allowance(){ # DISPLAY THE TOTAL AMOUNT OF TOKENS THE OWNER HAS AUTHORIZED THE S
                 echo "Owner: $owner"
                 echo -e "Spender: $spender\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1069,8 +1075,7 @@ allowance(){ # DISPLAY THE TOTAL AMOUNT OF TOKENS THE OWNER HAS AUTHORIZED THE S
         }')
 
     local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/allowance' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1102,7 +1107,7 @@ name(){ # DISPLAY THE NAME OF A SMART CONTRACT
                 echo "Contract Address: $contractAddress"
                 echo -e "Network: $net_name\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=2 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1116,9 +1121,8 @@ name(){ # DISPLAY THE NAME OF A SMART CONTRACT
             network: $network
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/name' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/name' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1150,7 +1154,7 @@ symbol(){ # DISPLAY THE SYMBOL OF A SMART CONTRACT
                 echo "Contract Address: $contractAddress"
                 echo -e "Network: $net_name\n"
                 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=2 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1164,9 +1168,8 @@ symbol(){ # DISPLAY THE SYMBOL OF A SMART CONTRACT
             network: $network
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/symbol' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/symbol' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1198,7 +1201,7 @@ supply(){ # DISPLAY THE TOTAL SUPPLY OF TOKENS CREATED IN AN ERC-20 SMART CONTRA
                 echo "Contract Address: $contractAddress"
                 echo -e "Network: $net_name\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=2 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1212,9 +1215,8 @@ supply(){ # DISPLAY THE TOTAL SUPPLY OF TOKENS CREATED IN AN ERC-20 SMART CONTRA
             network: $network
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/totalSupply' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/totalSupply' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1246,7 +1248,7 @@ decimals(){ # DISPLAY THE DECIMALS USED FOR TOKENS IN AN ERC-20 SMART CONTRACT
                 echo "Contract Address: $contractAddress"
                 echo -e "Network: $net_name\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=2 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1260,9 +1262,8 @@ decimals(){ # DISPLAY THE DECIMALS USED FOR TOKENS IN AN ERC-20 SMART CONTRACT
             network: $network
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/decimals' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/decimals' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1301,7 +1302,7 @@ balance20(){ # DISPLAY THE BALANCE OF TOKENS HELD BY AN ADDRESS
                 echo "Network: $net_name"
                 echo -e "Address: $address\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=3 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1317,9 +1318,8 @@ balance20(){ # DISPLAY THE BALANCE OF TOKENS HELD BY AN ADDRESS
             address: $address
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc20/balanceOf' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc20/balanceOf' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1375,7 +1375,7 @@ deploy721() { # DEPLOY AN ERC-721 SMART CONTRACT
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1395,9 +1395,8 @@ deploy721() { # DEPLOY AN ERC-721 SMART CONTRACT
         (if $alias != "" then {alias: $alias} else {} end) + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/deploy' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc721/deploy' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -1453,8 +1452,8 @@ mint721(){ # MINT AN NFT WITH THE PROVIDED METADATA TO THE SPECIFIED ADDRESS
                 step=6
                 ;;
             6)
-                _check_input "Royalty Percentage (optional): " royaltyPercentage 5 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "" "Royalty Percentage must be an integer number if provided."
+                _check_input "Royalty Percentage (optional): " royaltyPercentage 5 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Royalty Percentage must be an integer number if provided."
                 _step_back && continue
                 step=7
                 ;;
@@ -1477,7 +1476,7 @@ mint721(){ # MINT AN NFT WITH THE PROVIDED METADATA TO THE SPECIFIED ADDRESS
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=7 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1503,9 +1502,8 @@ mint721(){ # MINT AN NFT WITH THE PROVIDED METADATA TO THE SPECIFIED ADDRESS
         (if $royaltyPercentage != "" then {royaltyPercentage: $royaltyPercentage | tonumber} else {} end) + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/mint' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc721/mint' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -1565,7 +1563,7 @@ transfer721(){ # TRANSFER AN NFT TO AN ADDRESS
                 echo "From: $from"
                 echo -e "To: $to\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1585,9 +1583,8 @@ transfer721(){ # TRANSFER AN NFT TO AN ADDRESS
             to: $to
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/transfer' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc721/transfer' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -1633,7 +1630,7 @@ balance721(){ # DISPLAY THE NFT BALANCE OF AN ADDRESS IN THE SPECIFIED SMART CON
                 echo "Network: $net_name"
                 echo -e "Address: $address\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=3 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1649,9 +1646,8 @@ balance721(){ # DISPLAY THE NFT BALANCE OF AN ADDRESS IN THE SPECIFIED SMART CON
             address: $address
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/balanceOf' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc721/balanceOf' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1690,7 +1686,7 @@ uri721(){ # DISPLAY THE METADATA URI FOR AN NFT IN THE SPECIFIED CONTRACT
                 echo "Network: $net_name"
                 echo -e "Token ID: $id\n"
                 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=3 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1706,9 +1702,8 @@ uri721(){ # DISPLAY THE METADATA URI FOR AN NFT IN THE SPECIFIED CONTRACT
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/tokenUri' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc721/tokenUri' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1747,7 +1742,7 @@ owner(){ # DISPLAY THE ADDRESS OF THE OWNER OF AN NFT
                 echo "Network: $net_name"
                 echo -e "Token ID: $id\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=3 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1763,9 +1758,8 @@ owner(){ # DISPLAY THE ADDRESS OF THE OWNER OF AN NFT
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc721/ownerOf' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc721/ownerOf' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -1842,7 +1836,7 @@ deploy1155(){ # DEPLOY AN ERC-1155 SMART CONTRACT
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=8 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1868,9 +1862,8 @@ deploy1155(){ # DEPLOY AN ERC-1155 SMART CONTRACT
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/deploy' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc1155/deploy' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -1931,7 +1924,7 @@ mint1155(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF AN NFT WITH THE PROVIDED ME
                 echo "Token ID: $id"
                 echo -e "Amount: $amount\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -1951,9 +1944,8 @@ mint1155(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF AN NFT WITH THE PROVIDED ME
             amount: $amount
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/mint' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc1155/mint' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -1993,8 +1985,8 @@ mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PR
                 step=4
                 ;;
             4)
-                _check_input "How much different NFTs do you want to mint? " numNFTs 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Number of different NFTs is required." "Please enter an integer value."
+                _check_input "How much different NFTs do you want to mint? " numNFTs 3 "true" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "Number of different NFTs is required." "Please enter an integer value."
                 _step_back && continue
                 if [[ "$numNFTs" -lt 2 || "$numNFTs" -gt 10 ]]; then
                     echo "You can mint between 2 and 10 different NFTs in a single batch."; continue
@@ -2003,11 +1995,10 @@ mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PR
                 ;;
             5)
                 local i=1
-                ids=()
-                amounts=()
+                ids=() amounts=()
                 while (( i <= numNFTs )); do
                     [[ -z "${ids[i-1]}" ]] && {
-                        read -p "Token ID for NFT $i: " input
+                        read -e -p "Token ID for NFT $i: " input
                         [[ -z "$input" ]] && { echo "Token ID is required."; continue; }
                         [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                             (( i == 1 )) && { step=4; break; }
@@ -2016,9 +2007,8 @@ mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PR
                         }
                         [[ "$input" =~ ^[0-9]+$ ]] && ids+=("$input") || { echo "Token ID must be an integer."; continue; }
                     }
-
                     [[ -n "${ids[i-1]}" && -z "${amounts[i-1]}" ]] && {
-                        read -p "Amount for NFT $i: " amount
+                        read -e -p "Amount for NFT $i: " amount
                         [[ -z "$amount" ]] && { echo "Amount is required."; continue; }
                         [[ "$amount" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                             ids=("${ids[@]:0:${#ids[@]}-1}") && continue
@@ -2040,7 +2030,7 @@ mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PR
                 done
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2062,9 +2052,8 @@ mint_batch(){ # MINT THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS WITH THE PR
             amounts: $amounts
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/mintbatch' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc1155/mintbatch' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -2124,7 +2113,7 @@ transfer1155(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF AN NFT TO THE GIVEN
                 echo "Token ID: $id"
                 echo -e "Amount: $amount\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2144,9 +2133,8 @@ transfer1155(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF AN NFT TO THE GIVEN
             amount: $amount
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/transfer' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc1155/transfer' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -2197,11 +2185,10 @@ transfer_batch(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS TO 
                 ;;
             5)
                 local i=1
-                ids=()
-                amounts=()
+                ids=() amounts=()
                 while (( i <= numNFTs )); do
                     [[ -z "${ids[i-1]}" ]] && {
-                        read -p "Token ID for NFT $i: " input
+                        read -e -p "Token ID for NFT $i: " input
                         [[ -z "$input" ]] && { echo "Token ID is required."; continue; }
                         [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                             (( i == 1 )) && { step=4; break; }
@@ -2210,9 +2197,8 @@ transfer_batch(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS TO 
                         }
                         [[ "$input" =~ ^[0-9]+$ ]] && ids+=("$input") || { echo "Token ID must be an integer."; continue; }
                     }
-
                     [[ -n "${ids[i-1]}" && -z "${amounts[i-1]}" ]] && {
-                        read -p "Amount for NFT $i: " amount
+                        read -e -p "Amount for NFT $i: " amount
                         [[ -z "$amount" ]] && { echo "Amount is required."; continue; }
                         [[ "$amount" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && {
                             ids=("${ids[@]:0:${#ids[@]}-1}") && continue
@@ -2234,7 +2220,7 @@ transfer_batch(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS TO 
                 done
                 echo
                 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
+                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2256,9 +2242,8 @@ transfer_batch(){ # TRANSFER THE SPECIFIED AMOUNT OF COPIES OF MULTIPLE NFTS TO 
             amounts: $amounts
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/transferBatch' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/erc1155/transferBatch' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -2311,7 +2296,7 @@ balance1155(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CO
                 echo "Address: $address"
                 echo -e "Token ID: $id\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2329,9 +2314,8 @@ balance1155(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CO
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/balanceOf' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc1155/balanceOf' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -2370,7 +2354,7 @@ uri1155(){ # DISPLAY THE URI OF THE METADATA FOR THE NFT FROM THE GIVEN CONTRACT
                 echo "Network: $net_name"
                 echo -e "Token ID: $id\n"
                     
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=3 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2386,9 +2370,8 @@ uri1155(){ # DISPLAY THE URI OF THE METADATA FOR THE NFT FROM THE GIVEN CONTRACT
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/erc1155/tokenUri' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/erc1155/tokenUri' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -2436,8 +2419,8 @@ deployPOAP(){ # DEPLOY A POAP SMART CONTRACT AND MINT THE TOKENS
                 step=6
                 ;;
             6)
-                _check_input "Gas Limit (optional): " gasLimit 5 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "" "Gas Limit must be an integer number if provided."
+                _check_input "Gas Limit (optional): " gasLimit 5 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Gas Limit must be an integer number if provided."
                 [[ $? -eq 99 ]] && step=5 && continue
                 step=7
                 ;;
@@ -2452,7 +2435,7 @@ deployPOAP(){ # DEPLOY A POAP SMART CONTRACT AND MINT THE TOKENS
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2474,9 +2457,8 @@ deployPOAP(){ # DEPLOY A POAP SMART CONTRACT AND MINT THE TOKENS
         } + 
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end)')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/poap/deploy' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/poap/deploy' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -2530,7 +2512,7 @@ transferPOAP(){ # TRANSFER AN NFT TO THE GIVEN ADDRESS
                 echo "To: $to"
                 echo -e "Token ID: $id\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2548,9 +2530,8 @@ transferPOAP(){ # TRANSFER AN NFT TO THE GIVEN ADDRESS
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/poap/transfer' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/erc/v1/poap/transfer' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
@@ -2603,7 +2584,7 @@ balancePOAP(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CO
                 echo "Address: $address"
                 echo -e "Token ID: $id\n"
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2621,9 +2602,8 @@ balancePOAP(){ # DISPLAY THE AMOUNT OF AN NFT FOR THE GIVEN ADDRESS AND SMART CO
             id: $id
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/erc/v1/poap/balanceOf' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/erc/v1/poap/balanceOf' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }
@@ -2659,9 +2639,8 @@ new_wallet() { # GENERATES A ONE-TIME-USE HASH AND RETRIEVES THE URL TO CREATE A
             "cancelUrl": $cancel_url
         }')
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/cwll/v1/hash/new' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/cwll/v1/hash/new' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     local hash=$(echo "$response" | jq -r '.hash // empty')
 
@@ -2677,9 +2656,8 @@ get_address() { # RETRIEVE THE WALLET'S PUBLIC ADDRESS (FOR THE 1ST ACCOUNT) FOR
 
     echo -e "Retrieving the wallet's public address for your 1st account...\n"
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/cwll/v1/evm/wallet/custodied/address' \
-        "${auth[@]}" $ct_json \
-        --data-raw '{"userEmail": "'"$email"'"}')
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/cwll/v1/evm/wallet/custodied/address' \
+        "${auth[@]}" $ct_json --data-raw '{"userEmail": "'"$email"'"}')
 
     echo "$response"
 }
@@ -2700,12 +2678,12 @@ otp() { # REQUEST A ONE-TIME EMAIL OTP TO SIGN A MUTABLE TRANSACTION WITHIN THE 
     echo "Requesting OTP... Check your email inbox! ✉"
 }
 
-send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIFY ITS STATE (FOR VIEW OR PURE FUNCTIONS, USE query IN WEB3 CORE)
+send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIFY ITS STATE (FOR VIEW OR PURE FUNCTIONS, USE "query" IN WEB3 CORE)
 
     local contractAddress contractSpecsId sender strategy blockchainNetwork method numParams params value myReference gasLimit gasPrice nonce pin step=1
 
     echo "Please enter the following parameters to call the function:"
-    echo -e "contractAddress sender strategy network method params pin (contractSpecsId) (value) (myReference) (gasLimit) (gasPrice) (nonce)\n"
+    echo -e "contractAddress sender strategy network method params pin (contractSpecsId) (amount) (myReference) (gasLimit) (gasPrice) (nonce)\n"
 
     while true; do
         case $step in
@@ -2773,19 +2751,19 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                 pin_label=$([[ "$strategy" -eq 2 ]] && echo "2FA" || echo "OTP")
                 ;;
             4)
-                _check_input "Network: " blockchainNetwork 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Network: " blockchainNetwork 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Network is required." "Network must be an integer number."
                 _step_back && continue
                 step=5
                 ;;
             5)
-                _check_input "Method: " method 5 "true" '[[ "$input" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]' \
+                _check_input "Method: " method 4 "true" '[[ "$input" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]' \
                     "Method is required." "Method format is wrong."
                 _step_back && continue
                 step=6
                 ;;
             6)
-                _check_input "How many parameters do you want to input? " numParams 6 "false" \
+                _check_input "How many parameters do you want to input? " numParams 5 "false" \
                     '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
                 _step_back && continue
                 numParams=${numParams:-0}
@@ -2795,7 +2773,7 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
             7)
                 local i=1
                 while (( i <= numParams )); do
-                    read -p "Param $i: " input
+                    read -e -p "Param $i: " input
                     if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
                         if (( i == 1 )); then
                             step=6 && break
@@ -2811,44 +2789,46 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                 (( i > numParams )) && step=8
                 ;;
             8)
-                _check_input "Amount of native tokens (optional): " value 8 "false" \
-                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Amount must be an integer number if provided."
+                _check_input "Amount of native tokens (optional): " value 6 "false" \
+                    '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' "" "Amount must be a valid integer or decimal if provided."
                 [[ $? -eq 99 ]] && step=6 && continue
+                [[ -z "$value" ]] && value=${value:-0}
+                value_wei=$(echo "$value * 10^18 / 1" | bc)
                 step=9
                 ;;
             9)
-                _check_input "Reference (optional): " myReference 9 "false" '' "" ""
+                _check_input "Reference (optional): " myReference 8 "false" '' "" ""
                 _step_back && continue
                 step=10
                 ;;
             10)
-                _check_input "Gas Limit (optional): " gasLimit 10 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Gas Limit (optional): " gasLimit 9 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "" "Gas Limit must be an integer number if provided."
                 _step_back && continue
                 step=11
                 ;;
             11)
-                unset gasPrice nonce
-                _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 11 "false" \
+                gasPrice="" nonce=""
+                _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 10 "false" \
                     '[[ "$input" =~ ^[YyNn]$ ]]' "" "Invalid input! Please choose 'Y' or 'N'."
                 _step_back && continue                
                 [[ "$confirm" =~ ^[Yy]$ ]] && { flag=1; step=12; } || { flag=0; step=14; }
                 ;;
             12)
-                _check_input "Gas Price: " gasPrice 12 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Gas Price: " gasPrice 11 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Gas Price is required to accelerate or cancel the transaction." "Gas Price must be an integer number."
                 _step_back && continue
                 step=13
                 ;;
             13)
-                _check_input "Nonce: " nonce 13 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Nonce: " nonce 12 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Nonce is required to accelerate or cancel the transaction." "Nonce must be an integer number."
                 _step_back && continue
                 step=14
                 ;;
             14)
                 [[ "$strategy" == 3 ]] && otp
-                _check_input "$pin_label: " pin 14 "true" '[[ "$input" =~ ^[0-9]{6}$ ]]' \
+                _check_input "$pin_label: " pin 13 "true" '[[ "$input" =~ ^[0-9]{6}$ ]]' \
                     "$pin_label is required." "$pin_label must be a 6-digit number."                                                
                 [[ $? -eq 99 ]] && { step=$((flag == 1 ? 13 : 11)); continue; }
                 step=15
@@ -2861,21 +2841,50 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                 echo "Sender: $sender"
                 echo "Network: $net_name"
                 echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
                 [[ ${#params[@]} -gt 0 ]] && {
-                    display_params=$(printf '%s\n' "${params[@]}" | while read -r param; do
-                        [[ "$param" =~ ^[0-9]+$ ]] && printf "%s, " "$param" || printf "\"%s\", " "$param"
-                    done | sed 's/, $//')
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 echo "$pin_label: $pin"
-                [ -n "$value" ] && echo "Amount: $value"
+                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount: $value"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
                 [ -n "$nonce" ] && echo "Nonce: $nonce"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=14 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -2888,7 +2897,6 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
         --argjson blockchainNetwork "$blockchainNetwork" \
         --arg method "$method" \
         --arg pin "$pin" \
-        --arg value "$value" \
         --arg myReference "$myReference" \
         --arg gasLimit "$gasLimit" \
         --arg gasPrice "$gasPrice" \
@@ -2900,23 +2908,17 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
             method: $method,
             pin: $pin
         } +
-        (if $value != "" then {value: $value | tonumber} else {} end) +
         (if $contractSpecsId != "" then {contractSpecsId: $contractSpecsId | tonumber} else {} end) +
         (if $myReference != "" then {myReference: $myReference} else {} end) +
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
         (if $gasPrice != "" then {gasPrice: $gasPrice | tonumber} else {} end) +
         (if $nonce != "" then {nonce: $nonce | tonumber} else {} end)')
+    [[ -n "$value" ]] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
 
-    local final_params="["
-    for param in "${params[@]}"; do
-        [[ "$param" =~ ^[0-9]+$ ]] && final_params+="$param," || final_params+="\"$param\","
-    done
-    final_params="${final_params%,}]"
-    data=$(echo "$data" | sed "s/^{/{\"params\":$final_params, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/core/v1/evm/wallet/custodied/transact/mutable?strategy='$strategy'' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST \
+        'https://api.vottun.tech/core/v1/evm/wallet/custodied/transact/mutable?strategy='$strategy'' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     _loading
     echo -e "\nServer response:\n$response"
@@ -2985,57 +2987,57 @@ send_nat() { # TRANSFER NATIVE ASSETS FROM YOU CUSTODIED WALLET
                 pin_label=$([[ "$strategy" -eq 2 ]] && echo "2FA" || echo "OTP")
                 ;;
             2)
-                _check_input "Recipient: " recipient 2 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                _check_input "Recipient: " recipient 1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
                     "Recipient is required." "Recipient must start with '0x' and be 42 characters long."
                 _step_back && continue
                 step=3
                 ;;
             3)
-                _check_input "Network: " blockchainNetwork 3 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Network: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Network is required." "Network must be an integer number."
                 _step_back && continue
                 step=4
                 ;;
             4)
-                _check_input "Amount: " value 4 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "Amount is required." "Amount must be an integer number."
+                _check_input "Amount: " value 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be a valid integer or decimal."
                 _step_back && continue
-                displayAmount=$(echo "scale=18; $value/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                value_wei=$(echo "$value * 10^18 / 1" | bc)
                 step=5
                 ;;
             5)
-                _check_input "Reference (optional): " myReference 5 "false" '' "" ""
+                _check_input "Reference (optional): " myReference 4 "false" '' "" ""
                 _step_back && continue
                 step=6
                 ;;
             6)
-                _check_input "Gas Limit (optional): " gasLimit 6 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Gas Limit (optional): " gasLimit 5 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "" "Gas Limit must be an integer number if provided."
                 _step_back && continue
                 step=7
                 ;;
             7)
-                unset gasPrice nonce
-                _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 7 "false" \
+                gasPrice="" nonce=""
+                _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 6 "false" \
                     '[[ "$input" =~ ^[YyNn]$ ]]' "" "Invalid input! Please choose 'Y' or 'N'."
                 _step_back && continue               
                 [[ "$confirm" =~ ^[Yy]$ ]] && { flag=1; step=8; } || { flag=0; step=10; }
                 ;;
             8)
-                _check_input "Gas Price: " gasPrice 8 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Gas Price: " gasPrice 7 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Gas Price is required to accelerate or cancel the transaction." "Gas Price must be an integer number."
                 _step_back && continue
                 step=9
                 ;;
             9)
-                _check_input "Nonce: " nonce 9 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                _check_input "Nonce: " nonce 8 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
                     "Nonce is required to accelerate or cancel the transaction." "Nonce must be an integer number."
                 _step_back && continue
                 step=10
                 ;;
             10)
                 [[ "$strategy" == 3 ]] && otp
-                _check_input "$pin_label: " pin 10 "true" '[[ "$input" =~ ^[0-9]{6}$ ]]' \
+                _check_input "$pin_label: " pin 9 "true" '[[ "$input" =~ ^[0-9]{6}$ ]]' \
                     "$pin_label is required." "$pin_label must be a 6-digit number."                                               
                 [[ $? -eq 99 ]] && { step=$((flag == 1 ? 9 : 7)); continue; }
                 step=11
@@ -3046,7 +3048,7 @@ send_nat() { # TRANSFER NATIVE ASSETS FROM YOU CUSTODIED WALLET
                 echo "Sender: $sender"
                 echo "Recipient: $recipient"
                 echo "Network: $net_name"
-                echo "Amount: $displayAmount $currency"
+                echo "Amount: $value $currency"
                 echo "$pin_label: $pin"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
@@ -3054,7 +3056,7 @@ send_nat() { # TRANSFER NATIVE ASSETS FROM YOU CUSTODIED WALLET
                 [ -n "$nonce" ] && echo "Nonce: $nonce"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=10 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -3079,18 +3081,17 @@ send_nat() { # TRANSFER NATIVE ASSETS FROM YOU CUSTODIED WALLET
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
         (if $gasPrice != "" then {gasPrice: $gasPrice | tonumber} else {} end) +
         (if $nonce != "" then {nonce: $nonce | tonumber} else {} end)')
+    data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
 
-    data=$(echo "$data" | sed "s/^{/{\"value\":$value, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/core/v1/evm/wallet/custodied/transfer?strategy='$strategy'' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST \
+        'https://api.vottun.tech/core/v1/evm/wallet/custodied/transfer?strategy='$strategy'' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
     txHash=$(echo "$response" | jq -r '.txHash // empty')
 
     if [[ -n "$txHash" ]]; then
-        echo -e "\nSending: $displayAmount $currency\nfrom: $sender\nto: $recipient"
+        echo -e "\nSending: $value $currency\nfrom: $sender\nto: $recipient"
         _loading
         [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
     fi
@@ -3101,12 +3102,208 @@ send_nat() { # TRANSFER NATIVE ASSETS FROM YOU CUSTODIED WALLET
 ### WEB3 CORE ###    
 #################
 
-call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIFY ITS STATE (FOR VIEW OR PURE FUNCTIONS, USE query)
+deploy() { # DEPLOY A SMART CONTRACT ON THE BLOCKCHAIN OF YOUR CHOICE
 
-    local contractAddress contractSpecsId sender blockchainNetwork method numParams params myReference gasPrice nonce gasLimit useGasEstimation priorityFee step=1
+    local contractSpecsId sender blockchainNetwork method numParams params myReference gasPrice nonce gasLimit useGasEstimation priorityFee step=1
 
     echo "Please enter the following parameters to call the function:"
-    echo -e "contractAddress sender network method params (contractSpecsId) (myReference) (gasPrice) (nonce) (gasLimit) (useGasEstimation) (priorityFee)\n"
+    echo -e "contractSpecsId sender network params (gasPrice) (nonce) (myReference) (gasLimit) (useGasEstimation) (priorityFee) (alias)\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractSpecsId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Sender: " sender 1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Sender is required." "Sender must start with '0x' and be 42 characters long."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Network: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                _check_input "How many parameters do you want to input? " numParams 3 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
+                _step_back && continue
+                numParams=${numParams:-0}
+                params=()
+                step=5
+                ;;
+            5)
+                local i=1
+                while (( i <= numParams )); do
+                    read -e -p "Param $i: " input
+                    if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+                        if (( i == 1 )); then
+                            step=4 && break
+                        elif (( i > 1 )); then
+                            params=("${params[@]:0:${#params[@]}-1}") && ((i--))
+                        fi
+                    elif [[ -n "$input" ]]; then
+                        params+=("$input") && ((i++))
+                    else
+                        echo "Parameter $i is required."
+                    fi
+                done
+                (( i > numParams )) && step=6
+                ;;
+            6)
+                gasPrice="" nonce=""
+                _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 4 "false" \
+                    '[[ "$input" =~ ^[YyNn]$ ]]' "" "Invalid input! Please choose 'Y' or 'N'."
+                [[ $? -eq 99 ]] && step=4 && continue            
+                [[ "$confirm" =~ ^[Yy]$ ]] && { flag=1; step=7; } || { flag=0; step=9; }
+                ;;
+            7)
+                _check_input "Gas Price: " gasPrice 6 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Gas Price is required to accelerate or cancel the transaction." "Gas Price must be an integer number."
+                _step_back && continue
+                step=8
+                ;;
+            8)
+                _check_input "Nonce: " nonce 7 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Nonce is required to accelerate or cancel the transaction." "Nonce must be an integer number."
+                _step_back && continue
+                step=9
+                ;;
+            9)
+                _check_input "Reference (optional): " myReference 8 "false" '' "" ""             
+                [[ $? -eq 99 ]] && { step=$((flag == 1 ? 8 : 6)); continue; }
+                step=10
+                ;;
+            10)
+                _check_input "Gas Limit (optional): " gasLimit 9 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "" "Gas Limit must be an integer number if provided."
+                _step_back && continue
+                step=11
+                ;;
+            11)
+                _check_input "Use Gas Estimation? (optional) (Y/N): " useGasEstimation 10 "false" \
+                    '[[ "$input" =~ ^[YyNn]$ ]]' "" "Please type 'Y' or 'N' if provided ('true' by default)."
+                _step_back && continue
+                [[ "$useGasEstimation" =~ ^[Nn]$ ]] && useGasEstimation="false"
+                step=12
+                ;;
+            12)
+                _check_input "Priority Fee in Gwei (optional): " priorityFee 11 "false" \
+                    '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' "" "Priority Fee must be a number if provided."
+                _step_back && continue
+                step=13
+                ;;
+            13)
+                _check_input "Alias (optional): " alias 12 "false" 'true' "" ""
+                _step_back && continue
+                step=14
+                ;;
+            14)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractSpecsId"
+                echo "Sender: $sender"
+                echo "Network: $net_name"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
+                [[ ${#params[@]} -gt 0 ]] && {
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
+                    echo "Params: [$display_params]"
+                }
+                [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
+                [ -n "$nonce" ] && echo "Nonce: $nonce"
+                [ -n "$myReference" ] && echo "Reference: $myReference"
+                [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
+                [ -n "$useGasEstimation" ] && echo "Gas Estimation: $useGasEstimation"
+                [ -n "$priorityFee" ] && echo "Priority Fee: $priorityFee"
+                [ -n "$alias" ] && echo "Alias: $alias"
+                echo
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson contractSpecsId "$contractSpecsId" \
+        --arg sender "$sender" \
+        --argjson blockchainNetwork "$blockchainNetwork" \
+        --arg gasPrice "$gasPrice" \
+        --arg nonce "$nonce" \
+        --arg myReference "$myReference" \
+        --arg gasLimit "$gasLimit" \
+        --arg useGasEstimation "$useGasEstimation" \
+        --arg priorityFee "$priorityFee" \
+        --arg alias "$alias" \
+        '{
+            contractSpecsId: $contractSpecsId,
+            sender: $sender,
+            blockchainNetwork: $blockchainNetwork
+        } +
+        (if $gasPrice != "" then {gasPrice: $gasPrice | tonumber} else {} end) +
+        (if $nonce != "" then {nonce: $nonce | tonumber} else {} end) +
+        (if $myReference != "" then {myReference: $myReference} else {} end) +
+        (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
+        (if $useGasEstimation != "" then {useGasEstimation: ($useGasEstimation | test("^true$"))} else {} end) +
+        (if $priorityFee != "" then {priorityFee: $priorityFee | tonumber} else {} end) +
+        (if $alias != "" then {alias: $alias} else {} end)')
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/core/v1/evm/contract/deploy' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+    txHash=$(echo "$response" | jq -r '.txHash // empty')
+
+    if [[ -n "$txHash" ]]; then
+        contractAddress=$(echo "$response" | jq -r '.contractAddress // empty')
+        echo -e "\nDeploying the smart contract on $net_name..."
+        _loading
+        [[ -n "$url_tx" ]] && echo -e "\nBlock explorer URLs:\n$url_address$contractAddress\n$url_tx$txHash"
+    fi
+}
+
+call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIFY ITS STATE (FOR VIEW OR PURE FUNCTIONS, USE "query")
+
+    local contractAddress contractSpecsId sender blockchainNetwork method numParams params value myReference gasPrice nonce gasLimit useGasEstimation priorityFee step=1
+
+    echo "Please enter the following parameters to call the function:"
+    echo -e "contractAddress sender network method params (contractSpecsId) (amount) (gasPrice) (nonce) (myReference) (gasLimit) (useGasEstimation) (priorityFee)\n"
 
     while true; do
         case $step in
@@ -3117,8 +3314,8 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 step=2
                 ;;
             2)
-                _check_input "Contract Specs ID (optional): " contractSpecsId 1 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "" "Contract Specs ID must be an integer number if provided."
+                _check_input "Contract Specs ID (optional): " contractSpecsId 1 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Contract Specs ID must be an integer number if provided."
                 _step_back && continue
                 step=3
                 ;;
@@ -3151,7 +3348,7 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
             7)
                 local i=1
                 while (( i <= numParams )); do
-                    read -p "Param $i: " input
+                    read -e -p "Param $i: " input
                     if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
                         if (( i == 1 )); then
                             step=6 && break
@@ -3167,15 +3364,15 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 (( i > numParams )) && step=8
                 ;;
             8)
-                _check_input "Amount of native tokens (optional): " value 7 "false" \
-                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Amount must be an integer number if provided."
+                _check_input "Amount of native tokens (optional): " value 6 "false" \
+                    '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' "" "Amount must be a valid integer or decimal if provided."
                 [[ $? -eq 99 ]] && step=6 && continue
                 [[ -z "$value" ]] && value=${value:-0}
-                displayAmount=$(echo "scale=18; $value/10^18" | bc | sed 's/^\./0./;s/0*$//;s/\.$//')
+                value_wei=$(echo "$value * 10^18 / 1" | bc)
                 step=9
                 ;;
             9)
-                unset gasPrice nonce
+                gasPrice="" nonce=""
                 _check_input "Are you aiming to accelerate or cancel a transaction? (Y/N): " confirm 8 "false" \
                     '[[ "$input" =~ ^[YyNn]$ ]]' "" "Invalid input! Please choose 'Y' or 'N'."
                 _step_back && continue             
@@ -3205,19 +3402,19 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 step=14
                 ;;
             14)
-                _check_input "Use Gas Estimation? (optional) (Y/N): " useGasEstimation 13 "false" '[[ "$input" =~ ^[YyNn]$ ]]' \
-                    "" "Please type 'Y' or 'N' if provided ('true' by default)."
+                _check_input "Use Gas Estimation? (optional) (Y/N): " useGasEstimation 13 "false" \
+                    '[[ "$input" =~ ^[YyNn]$ ]]' "" "Please type 'Y' or 'N' if provided ('true' by default)."
                 _step_back && continue
                 [[ "$useGasEstimation" =~ ^[Nn]$ ]] && useGasEstimation="false"
                 step=15
                 ;;
             15)
-                _check_input "Priority Fee in Gwei (optional): " priorityFee 14 "false" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
-                    "" "Priority Fee must be a number if provided."
+                _check_input "Priority Fee in Gwei (optional): " priorityFee 14 "false" \
+                    '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' "" "Priority Fee must be a number if provided."
                 _step_back && continue
                 step=16
                 ;;
-            16)
+            16)                
                 IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
                 echo -e "\nYou've entered the following parameters:"
                 echo "Contract Address: $contractAddress"
@@ -3225,13 +3422,42 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 echo "Sender: $sender"
                 echo "Network: $net_name"
                 echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
                 [[ ${#params[@]} -gt 0 ]] && {
-                    display_params=$(printf '%s\n' "${params[@]}" | while read -r param; do
-                        [[ "$param" =~ ^[0-9]+$ ]] && printf "%s, " "$param" || printf "\"%s\", " "$param"
-                    done | sed 's/, $//')
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
-                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $displayAmount $currency"
+                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
                 [ -n "$nonce" ] && echo "Nonce: $nonce"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
@@ -3240,7 +3466,7 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 [ -n "$priorityFee" ] && echo "Priority Fee: $priorityFee"
                 echo
 
-                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=15 || return 1; }
+                _confirmation && step=0 || { _step_back || return 1; }
                 [[ $step -eq 0 ]] && break
                 ;;
         esac
@@ -3271,19 +3497,11 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
         (if $useGasEstimation != "" then {useGasEstimation: ($useGasEstimation | test("^true$"))} else {} end) +
         (if $priorityFee != "" then {priorityFee: $priorityFee | tonumber} else {} end)')
+    [ -n "$value" ] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
 
-    [ -n "$value" ] && data=$(echo "$data" | sed "s/^{/{\"value\":$value, /")
-
-    local final_params="["
-    for param in "${params[@]}"; do
-        [[ "$param" =~ ^[0-9]+$ ]] && final_params+="$param," || final_params+="\"$param\","
-    done
-    final_params="${final_params%,}]"
-    data=$(echo "$data" | sed "s/^{/{\"params\":$final_params, /")
-
-    local response=$(curl --silent --location 'https://api.vottun.tech/core/v1/evm/transact/mutable' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/core/v1/evm/transact/mutable' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     _loading
     echo -e "\nServer response:\n$response"
@@ -3307,8 +3525,8 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
                 step=2
                 ;;
             2)
-                _check_input "Contract Specs ID (optional): " contractSpecsId 1 "false" '[[ "$input" =~ ^[0-9]+$ ]]' \
-                    "" "Contract Specs ID must be an integer number if provided."
+                _check_input "Contract Specs ID (optional): " contractSpecsId 1 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Contract Specs ID must be an integer number if provided."
                 _step_back && continue
                 step=3
                 ;;
@@ -3335,7 +3553,7 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
             6)
                 local i=1
                 while (( i <= numParams )); do
-                    read -p "Param $i: " input
+                    read -e -p "Param $i: " input
                     if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
                         if (( i == 1 )); then
                             step=5 && break
@@ -3357,10 +3575,39 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
                 [ -n "$contractSpecsId" ] && echo "Contract Specs ID: $contractSpecsId"
                 echo "Network: $net_name"
                 echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
                 [[ ${#params[@]} -gt 0 ]] && {
-                    display_params=$(printf '%s\n' "${params[@]}" | while read -r param; do
-                        [[ "$param" =~ ^[0-9]+$ ]] && printf "%s, " "$param" || printf "\"%s\", " "$param"
-                    done | sed 's/, $//')
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 echo
@@ -3382,17 +3629,553 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
             method: $method
         } +
         (if $contractSpecsId != "" then {contractSpecsId: $contractSpecsId | tonumber} else {} end)')
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
 
-    local final_params="["
-    for param in "${params[@]}"; do
-        [[ "$param" =~ ^[0-9]+$ ]] && final_params+="$param," || final_params+="\"$param\","
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/core/v1/evm/transact/view' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+get_nets() { # REQUEST THE LIST OF AVAILABLE BLOCKCHAIN NETWORKS
+
+    echo -e "Retrieving all available blockchain networks...\n"
+
+    curl --location --request GET 'https://api.vottun.tech/core/v1/evm/info/chains' "${auth[@]}"
+
+    echo
+}
+
+get_specs() { # REQUEST THE LIST OF AVAILABLE CONTRACT SPECIFICATIONS
+
+    echo -e "Retrieving the info for the shared smart contracts and your own...\n"
+
+    curl --location --request GET 'https://api.vottun.tech/core/v1/evm/info/specs' "${auth[@]}"
+
+    echo
+}
+
+query_address(){ # QUERY AN ADDRESS TO DETERMINE IF IT IS A SMART CONTRACT
+
+    local address network step=1
+
+    echo "Please enter the following parameters to find out if the address is a smart contract:"
+    echo -e "address network\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Address: " address -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$network")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Address: $address"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done 
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/info/address/'$address'/iscontract?network='$network'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+query_tx(){ # QUERY TRANSACTION INFORMATION FROM THE BLOCKCHAIN
+
+    local txHash network step=1
+
+    echo "Please enter the following parameters to get the transaction information:"
+    echo -e "txHash network\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Tx Hash: " txHash -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{64}$ ]]' \
+                    "Tx Hash is required." "Tx Hash must start with '0x' and be 66 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$network")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Tx Hash: $txHash"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done 
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/info/transaction/'$txHash'?network='$network'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+query_status(){ # QUERY THE STATUS OF A TRANSACTION
+
+    local txHash network step=1
+
+    echo "Please enter the following parameters to check the transaction status:"
+    echo -e "txHash network\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Tx Hash: " txHash -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{64}$ ]]' \
+                    "Tx Hash is required." "Tx Hash must start with '0x' and be 66 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$network")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Tx Hash: $txHash"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done 
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/info/transaction/'$txHash'/status?network='$network'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+query_ref(){ # QUERY THE STATUS OF A TRANSACTION USING THE CUSTOMER REFERENCE
+
+    local reference
+
+    echo -e "Please enter the following parameter to check the transaction status:\n"
+
+    while true; do 
+        _check_input "Reference: " reference -1 "true" 'true' "Reference is required." ""
+        [[ $? -eq 99 ]] && continue
+                
+        echo -e "\nYou've entered the following parameter:\nReference: $reference\n"
+
+        _confirmation && break || [[ $? -eq 99 ]] || return 1
     done
-    final_params="${final_params%,}]"
-    data=$(echo "$data" | sed "s/^{/{\"params\":$final_params, /")
 
-    local response=$(curl --silent --location 'https://api.vottun.tech/core/v1/evm/transact/view' \
-        "${auth[@]}" $ct_json \
-        --data-raw "$data")
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/info/transaction/reference/'$reference'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+query_gas(){ # QUERY THE CURRENT GAS PRICE FOR A SPECIFIED BLOCKCHAIN NETWORK
+
+    local network
+
+    echo -e "Please enter the following parameter to get the current gas price:\n"
+
+    while true; do 
+        _check_input "Network: " network -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+            "Network is required." "Network must be an integer number."
+        [[ $? -eq 99 ]] && continue
+
+        IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$network")"
+        echo -e "\nYou've entered the following parameter:\nNetwork: $net_name\n"
+
+        _confirmation && break || [[ $? -eq 99 ]] || return 1
+    done
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/network/gasprice?network='$network'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+query_nat(){ # QUERY THE BALANCE OF NATIVE CURRENCY FOR A SPECIFIED ADDRESS
+
+    local address network step=1
+
+    echo "Please enter the following parameters to check the balance of native currency:"
+    echo -e "address network\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Address: " address -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Address is required." "Address must start with '0x' and be 42 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Network: " network 1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$network")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Address: $address"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done 
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/chain/'$address'/balance?network='$network'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
+
+gas_deploy() { # ESTIMATE THE GAS REQUIRED FOR A SMART CONTRACT DEPLOYMENT
+
+    local contractSpecsId sender blockchainNetwork numParams params step=1
+
+    echo "Please enter the following parameters to estimate the gas required to deploy a smart contract:"
+    echo -e "contractSpecsId sender network params\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractSpecsId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Sender: " sender 1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Sender is required." "Sender must start with '0x' and be 42 characters long."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Network: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                _check_input "How many parameters do you want to input? " numParams 3 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
+                _step_back && continue
+                numParams=${numParams:-0}
+                params=()
+                step=5
+                ;;
+            5)
+                local i=1
+                while (( i <= numParams )); do
+                    read -e -p "Param $i: " input
+                    if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+                        if (( i == 1 )); then
+                            step=4 && break
+                        elif (( i > 1 )); then
+                            params=("${params[@]:0:${#params[@]}-1}") && ((i--))
+                        fi
+                    elif [[ -n "$input" ]]; then
+                        params+=("$input") && ((i++))
+                    else
+                        echo "Parameter $i is required."
+                    fi
+                done
+                (( i > numParams )) && step=6
+                ;;
+            6)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractSpecsId"
+                echo "Sender: $sender"
+                echo "Network: $net_name"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
+                [[ ${#params[@]} -gt 0 ]] && {
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
+                    echo "Params: [$display_params]"
+                }
+                echo
+
+                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson contractSpecsId "$contractSpecsId" \
+        --arg sender "$sender" \
+        --argjson blockchainNetwork "$blockchainNetwork" \
+        '{
+            contractSpecsId: $contractSpecsId,
+            sender: $sender,
+            blockchainNetwork: $blockchainNetwork
+        }')
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/contract/deploy/estimategas' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+gas_tx() { # ESTIMATE THE GAS REQUIRED TO CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT
+
+    local contractAddress sender blockchainNetwork method numParams params value step=1
+
+    echo "Please enter the following parameters to estimate the gas required to call the function:"
+    echo -e "contractAddress sender network method params (amount)\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " contractAddress -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Contract Address is required." "Contract Address must start with '0x' and be 42 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Sender: " sender 1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Sender is required." "Sender must start with '0x' and be 42 characters long."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Network: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                _check_input "Method: " method 3 "true" '[[ "$input" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]' \
+                    "Method is required." "Method format is wrong."
+                _step_back && continue
+                step=5
+                ;;
+            5)
+                _check_input "How many parameters do you want to input? " numParams 4 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
+                _step_back && continue
+                numParams=${numParams:-0}
+                params=()
+                step=6
+                ;;
+            6)
+                local i=1
+                while (( i <= numParams )); do
+                    read -e -p "Param $i: " input
+                    if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+                        if (( i == 1 )); then
+                            step=5 && break
+                        elif (( i > 1 )); then
+                            params=("${params[@]:0:${#params[@]}-1}") && ((i--))
+                        fi
+                    elif [[ -n "$input" ]]; then
+                        params+=("$input") && ((i++))
+                    else
+                        echo "Parameter $i is required."
+                    fi
+                done
+                (( i > numParams )) && step=7
+                ;;
+            7)
+                _check_input "Amount of native tokens (optional): " value 5 "false" \
+                    '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' "" "Amount must be a valid integer or decimal if provided."
+                [[ $? -eq 99 ]] && step=5 && continue
+                [[ -z "$value" ]] && value=${value:-0}
+                value_wei=$(echo "$value * 10^18 / 1" | bc)
+                step=8
+                ;;
+            8)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Address: $contractAddress"
+                echo "Sender: $sender"
+                echo "Network: $net_name"
+                echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                parse_structure() {
+                    local input="$1"
+                    if [[ "$input" =~ ^\[.*\]$ ]]; then
+                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
+                        while IFS= read -r -n1 char; do
+                            [[ "$char" == "[" ]] && ((depth++))
+                            [[ "$char" == "]" ]] && ((depth--))
+                            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
+                            else
+                                buffer+="$char"
+                            fi
+                        done <<< "$trimmed"
+                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
+                        echo "$result"
+                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                        echo "$input"
+                    else
+                        echo "\"$input\""
+                    fi
+                }
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                done
+                [[ ${#params[@]} -gt 0 ]] && {
+                    local display_params=$(jq -n '[]')
+                    for param in "${params[@]}"; do
+                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
+                    done
+                    display_params=$(echo "$display_params" | jq -r '. | map(
+                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
+                    ) | join(", ")')
+                    echo "Params: [$display_params]"
+                }
+                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
+                echo
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --arg contractAddress "$contractAddress" \
+        --arg sender "$sender" \
+        --argjson blockchainNetwork "$blockchainNetwork" \
+        --arg method "$method" \
+        '{
+            contractAddress: $contractAddress,
+            sender: $sender,
+            blockchainNetwork: $blockchainNetwork,
+            method: $method
+        }')
+    [ -n "$value" ] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/transact/mutable/estimategas' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+gas_nat() { # ESTIMATE THE GAS REQUIRED TO TRANSFER NATIVE ASSETS
+
+    local sender recipient blockchainNetwork value step=1
+
+    echo "Please enter the following parameters to estimate the gas required to transfer native assets:"
+    echo -e "sender recipient network amount\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Sender: " sender -1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Sender is required." "Sender must start with '0x' and be 42 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Recipient: " recipient 1 "true" '[[ "$input" =~ ^0x[0-9a-fA-F]{40}$ ]]' \
+                    "Recipient is required." "Recipient must start with '0x' and be 42 characters long."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Network: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Network is required." "Network must be an integer number."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                _check_input "Amount: " value 3 "true" '[[ "$input" =~ ^[0-9]*\.?[0-9]+$ ]]' \
+                    "Amount is required." "Amount must be a valid integer or decimal."
+                _step_back && continue
+                value_wei=$(echo "$value * 10^18 / 1" | bc)
+                step=5
+                ;;
+            5)
+                IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Sender: $sender"
+                echo "Recipient: $recipient"
+                echo "Network: $net_name"
+                echo -e "Amount: $value $currency\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --arg sender "$sender" \
+        --arg recipient "$recipient" \
+        --argjson blockchainNetwork "$blockchainNetwork" \
+        '{
+            sender: $sender,
+            recipient: $recipient,
+            blockchainNetwork: $blockchainNetwork,
+        }')
+    data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/core/v1/evm/chain/transfer/estimategas' \
+        "${auth[@]}" $ct_json --data-raw "$data")
 
     echo -e "Server response:\n$response"
 }

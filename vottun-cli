@@ -10,7 +10,7 @@ cat << banner
 ██╗░░░██╔╝██╔══██╗╚══██╔═════██╔══╝██║░░░██╗████╗░██║  ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
 ╚██╗░██╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║  ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
 ░╚████╔╝░░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██║╚████║
-░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.5.0
+░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.5.1
 ░░░╚═╝░░░░░╚════╝░░░░╚═╝░░░░░╚═╝░░░░╚═════╝░╚═╝░░╚══╝ Scripted by @borj404
 
 banner
@@ -2857,7 +2857,7 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -2872,8 +2872,8 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 echo "$pin_label: $pin"
@@ -3225,7 +3225,7 @@ deploy() { # DEPLOY A SMART CONTRACT ON THE BLOCKCHAIN OF YOUR CHOICE
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -3240,8 +3240,8 @@ deploy() { # DEPLOY A SMART CONTRACT ON THE BLOCKCHAIN OF YOUR CHOICE
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
@@ -3438,7 +3438,7 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -3453,8 +3453,8 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
@@ -3591,7 +3591,7 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -3606,8 +3606,8 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 echo
@@ -3930,7 +3930,7 @@ gas_deploy() { # ESTIMATE THE GAS REQUIRED FOR A SMART CONTRACT DEPLOYMENT
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -3945,8 +3945,8 @@ gas_deploy() { # ESTIMATE THE GAS REQUIRED FOR A SMART CONTRACT DEPLOYMENT
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 echo
@@ -4065,7 +4065,7 @@ gas_tx() { # ESTIMATE THE GAS REQUIRED TO CALL ANY PUBLIC FUNCTION IMPLEMENTED I
                         done <<< "$trimmed"
                         [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
                         echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
                         echo "$input"
                     else
                         echo "\"$input\""
@@ -4080,8 +4080,8 @@ gas_tx() { # ESTIMATE THE GAS REQUIRED TO CALL ANY PUBLIC FUNCTION IMPLEMENTED I
                         display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
                     done
                     display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" then tostring else "\"\(.)\"" end
-                    ) | join(", ")')
+                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
+                        ) | join(", ")')
                     echo "Params: [$display_params]"
                 }
                 [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"

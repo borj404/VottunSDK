@@ -2,11 +2,11 @@ This CLI tool for Unix-like systems provides a straightforward way to interact w
 
 Feel free to modify the script to suit your needs.
 
-## Prerequisites
+# Prerequisites
 
 Ensure that both _curl_ and _jq_ are installed on your system.
 
-## Setup
+# Setup
 
 Replace the content in lines 3-4 (between the quotation marks) with your own _App ID_ and _API key_, which you can easily obtain by accessing your [Vottun account](https://app.vottun.io/).
 
@@ -17,9 +17,9 @@ Enter your _email_ on line 5 to use the Custodied Wallets functions.
 Navigate to the script’s location, make it executable, and run it:
 
 ```
-chmod +x vottun-cli
+chmod +x evm-cli
 
-./vottun-cli
+./evm-cli
 ```
 
 ### Or
@@ -27,10 +27,10 @@ chmod +x vottun-cli
 Run within the current shell environment:
 
 ```
-source vottun-cli
+source evm-cli
 ```
 
-## Usage
+# Usage
 
 Type the function and fill in the required parameters.
 
@@ -44,19 +44,21 @@ To undo the previous entry type __<<__ , __..__ , __!undo__ , __!back__ or __!de
 
 All token amounts must be entered in standard units (without 18 decimals), not in wei as stated in the docs (e.g: 0.1, not 100,000,000,000,000,000).
 
-## Menu & Docs
+# Menu & Docs
 
 After launching the script, type _help_ to view the list of available functions.
 
 For detailed information about the APIs included in this script, refer to the [documentation](https://docs.vottun.io/).
 
-## Support
-
-If you encounter any errors or bugs while running this script, please let me know.
+# Support
 
 For any issues or questions, contact me on [Discord](https://discord.com/users/1206334838093643817).
 
-## Functions list
+If you encounter any errors or bugs while running this script, please let me know.
+
+# Functions list
+
+## EVM CLI
 
 ### IPFS
 

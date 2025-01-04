@@ -10,7 +10,7 @@ cat << banner
 ██╗░░░██╔╝██╔══██╗╚══██╔═════██╔══╝██║░░░██╗████╗░██║  ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
 ╚██╗░██╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║  ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
 ░╚████╔╝░░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██║╚████║
-░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║        Version 0.5.1
+░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║       EVM CLI v1.0.0
 ░░░╚═╝░░░░░╚════╝░░░░╚═╝░░░░░╚═╝░░░░╚═════╝░╚═╝░░╚══╝ Scripted by @borj404
 
 banner
@@ -102,17 +102,11 @@ auth=("--header" "x-application-vkn: $APP_ID" "--header" "Authorization: Bearer 
 ct_json="--header 'Content-Type: application/json'"
 
 _check_input() {
-    local prompt="$1"
-    local var_name="$2"
-    local undo_step="$3"
-    local required="$4"
-    local validate_cmd="$5"
-    local empty_err="$6"
-    local format_err="$7"
+
+    local prompt="$1" var_name="$2" undo_step="$3" required="$4" validate_cmd="$5" empty_err="$6" format_err="$7"
     
     while true; do
-        read -e -p "$prompt" input
-        
+        read -e -p "$prompt" input        
         if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
             if [[ "$undo_step" -ne -1 ]]; then
                 return 99
@@ -121,7 +115,6 @@ _check_input() {
                 continue
             fi
         fi
-
         if [[ "$required" == "true" && -z "$input" ]]; then
             echo "Error: $empty_err"
         elif [ -n "$input" ] && ! eval "$validate_cmd"; then
@@ -134,10 +127,73 @@ _check_input() {
 }
 
 _step_back() {
+
     [[ $? -eq 99 ]] && step=$((step - 1))
 }
 
+_parse_params() {
+
+    local input="$1"
+    [[ "$input" =~ ^[0-9]+$ && (${#input} -gt 31 || "$input" =~ (999999999999999|000000000000000)) ]] && { echo "\"$input\""; return; }
+    if [[ "$input" =~ ^\[.*\]$ ]]; then
+        local result="[" trimmed buffer="" depth=0 first=true
+        trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g')       
+        while IFS= read -r -n1 char; do
+            [[ "$char" == "[" ]] && ((depth++))
+            [[ "$char" == "]" ]] && ((depth--))
+            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                if [ -n "$buffer" ]; then
+                    $first || result+=", "
+                    result+="$(_parse_structure "$buffer")"
+                    buffer=""
+                    first=false
+                fi
+            else
+                buffer+="$char"
+            fi
+        done <<< "$trimmed"
+        [[ -n "$buffer" ]] && {
+            $first || result+=", "
+            result+="$(_parse_structure "$buffer")"
+        }      
+        result+="]"
+        echo "$result"
+        return
+    fi
+    [[ "$input" =~ ^\"[0-9]+\"$|^\"(true|false)\"$|^[0-9]+$|^(true|false)$ ]] && echo "$input" || echo "\"$input\""
+}
+
+_display_params() {
+
+    local -n params_ref=$1
+    [[ ${#params_ref[@]} -gt 0 ]] && { 
+        echo "Params: ["
+        local total=${#params_ref[@]}
+        for ((i=0; i<total; i++)); do
+            param="${params_ref[$i]}"
+            if [[ "$param" =~ ^\[.*\]$ ]]; then
+                echo -n "  ["
+                local first=true
+                while IFS= read -r item; do
+                    $first || echo -n ", "; first=false
+                    [[ "$item" =~ ^[0-9]+$|^(true|false)$ ]] && echo -n "$item" || echo -n "\"${item//\"/}\""
+                done <<< "$(echo "$param" | sed -E 's/^\[|\]$//g' | tr ',' '\n')"
+                echo -n "]"
+            elif [[ "$param" =~ ^[0-9]+$ && (${#param} -gt 31 || "$param" =~ (999999999999999|000000000000000)) ]]; then
+                echo -n "  $param"
+            elif [[ "$param" =~ ^[0-9]+$|^(true|false)$|^\".*\"$ ]]; then
+                echo -n "  $param"
+            else
+                echo -n "  \"$param\""
+            fi
+            [[ $i -lt $((total-1)) ]] && echo "," || echo ""
+        done
+        echo "]"
+    }
+}
+
 _confirmation() {
+
     while true; do
         read -e -p "Do you want to proceed with these parameters? (Y/N): " confirm
         [[ "$confirm" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && return 99
@@ -272,6 +328,7 @@ _network_details() {
 }
 
 _loading() {
+
     local duration=0.5 bar_length=24
     for ((i = 0; i <= bar_length; i++)); do
         local progress=$(for ((j = 0; j < i; j++)); do printf "\033[44m \033[0m "; done)
@@ -2842,42 +2899,12 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
                 echo "Network: $net_name"
                 echo "Method: $method"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
+                _display_params params
                 echo "$pin_label: $pin"
-                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount: $value"
+                [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
                 [ -n "$gasLimit" ] && echo "Gas Limit: $gasLimit"
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
@@ -2913,8 +2940,9 @@ send_tx() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND MODIF
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
         (if $gasPrice != "" then {gasPrice: $gasPrice | tonumber} else {} end) +
         (if $nonce != "" then {nonce: $nonce | tonumber} else {} end)')
-    [[ -n "$value" ]] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request POST \
         'https://api.vottun.tech/core/v1/evm/wallet/custodied/transact/mutable?strategy='$strategy'' \
@@ -3210,40 +3238,10 @@ deploy() { # DEPLOY A SMART CONTRACT ON THE BLOCKCHAIN OF YOUR CHOICE
                 echo "Sender: $sender"
                 echo "Network: $net_name"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
+                _display_params params
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
                 [ -n "$nonce" ] && echo "Nonce: $nonce"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
@@ -3283,6 +3281,7 @@ deploy() { # DEPLOY A SMART CONTRACT ON THE BLOCKCHAIN OF YOUR CHOICE
         (if $priorityFee != "" then {priorityFee: $priorityFee | tonumber} else {} end) +
         (if $alias != "" then {alias: $alias} else {} end)')
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request POST 'https://api.vottun.tech/core/v1/evm/contract/deploy' \
         "${auth[@]}" $ct_json --data-raw "$data")
@@ -3414,7 +3413,7 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 _step_back && continue
                 step=16
                 ;;
-            16)                
+            16)
                 IFS='|' read -r net_name currency url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
                 echo -e "\nYou've entered the following parameters:"
                 echo "Contract Address: $contractAddress"
@@ -3423,41 +3422,11 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
                 echo "Network: $net_name"
                 echo "Method: $method"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
-                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
+                _display_params params
+                [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
                 [ -n "$gasPrice" ] && echo "Gas Price: $gasPrice"
                 [ -n "$nonce" ] && echo "Nonce: $nonce"
                 [ -n "$myReference" ] && echo "Reference: $myReference"
@@ -3497,8 +3466,9 @@ call_function() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT AND
         (if $gasLimit != "" then {gasLimit: $gasLimit | tonumber} else {} end) +
         (if $useGasEstimation != "" then {useGasEstimation: ($useGasEstimation | test("^true$"))} else {} end) +
         (if $priorityFee != "" then {priorityFee: $priorityFee | tonumber} else {} end)')
-    [ -n "$value" ] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request POST 'https://api.vottun.tech/core/v1/evm/transact/mutable' \
         "${auth[@]}" $ct_json --data-raw "$data")
@@ -3576,40 +3546,10 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
                 echo "Network: $net_name"
                 echo "Method: $method"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
+                _display_params params
                 echo
 
                 _confirmation && step=0 || { [[ $? -eq 99 ]] && step=5 || return 1; }
@@ -3630,6 +3570,7 @@ query() { # CALL ANY PUBLIC FUNCTION IMPLEMENTED IN A SMART CONTRACT WITHOUT CHA
         } +
         (if $contractSpecsId != "" then {contractSpecsId: $contractSpecsId | tonumber} else {} end)')
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request GET 'https://api.vottun.tech/core/v1/evm/transact/view' \
         "${auth[@]}" $ct_json --data-raw "$data")
@@ -3915,40 +3856,10 @@ gas_deploy() { # ESTIMATE THE GAS REQUIRED FOR A SMART CONTRACT DEPLOYMENT
                 echo "Sender: $sender"
                 echo "Network: $net_name"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
+                _display_params params
                 echo
 
                 _confirmation && step=0 || { [[ $? -eq 99 ]] && step=4 || return 1; }
@@ -3967,6 +3878,7 @@ gas_deploy() { # ESTIMATE THE GAS REQUIRED FOR A SMART CONTRACT DEPLOYMENT
             blockchainNetwork: $blockchainNetwork
         }')
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request GET \
         'https://api.vottun.tech/core/v1/evm/contract/deploy/estimategas' \
@@ -4050,41 +3962,11 @@ gas_tx() { # ESTIMATE THE GAS REQUIRED TO CALL ANY PUBLIC FUNCTION IMPLEMENTED I
                 echo "Network: $net_name"
                 echo "Method: $method"
                 local final_params=$(jq -n '[]')
-                parse_structure() {
-                    local input="$1"
-                    if [[ "$input" =~ ^\[.*\]$ ]]; then
-                        local result=$(jq -n '[]') trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g') buffer="" depth=0
-                        while IFS= read -r -n1 char; do
-                            [[ "$char" == "[" ]] && ((depth++))
-                            [[ "$char" == "]" ]] && ((depth--))
-                            if [[ "$char" == "," && $depth -eq 0 ]]; then
-                                result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]") && buffer=""
-                            else
-                                buffer+="$char"
-                            fi
-                        done <<< "$trimmed"
-                        [[ -n "$buffer" ]] && result=$(echo "$result" | jq ". + [$(parse_structure "$buffer")]")
-                        echo "$result"
-                    elif [[ "$input" =~ ^[0-9]+$|^(true|false)$ ]]; then
-                        echo "$input"
-                    else
-                        echo "\"$input\""
-                    fi
-                }
                 for param in "${params[@]}"; do
-                    final_params=$(echo "$final_params" | jq ". + [$(parse_structure "$param")]")
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
                 done
-                [[ ${#params[@]} -gt 0 ]] && {
-                    local display_params=$(jq -n '[]')
-                    for param in "${params[@]}"; do
-                        display_params=$(echo "$display_params" | jq ". + [$(parse_structure "$param")]")
-                    done
-                    display_params=$(echo "$display_params" | jq -r '. | map(
-                        if type == "array" or type == "number" or type == "boolean" then tostring else "\"\(.)\"" end
-                        ) | join(", ")')
-                    echo "Params: [$display_params]"
-                }
-                [[ -n "$value" && "$value" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
+                _display_params params
+                [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && echo "Amount of native tokens: $value $currency"
                 echo
 
                 _confirmation && step=0 || { _step_back || return 1; }
@@ -4104,8 +3986,9 @@ gas_tx() { # ESTIMATE THE GAS REQUIRED TO CALL ANY PUBLIC FUNCTION IMPLEMENTED I
             blockchainNetwork: $blockchainNetwork,
             method: $method
         }')
-    [ -n "$value" ] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
+    [[ -n "$value_wei" && "$value_wei" -gt 0 ]] && data=$(echo "$data" | sed "s/^{/{\"value\":$value_wei, /")
     data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
 
     local response=$(curl --silent --location --request GET \
         'https://api.vottun.tech/core/v1/evm/transact/mutable/estimategas' \

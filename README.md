@@ -12,7 +12,7 @@ Replace the content in lines 3-4 (between the quotation marks) with your own _Ap
 
 Enter your _email_ on line 5 to use the Custodied Wallets functions.
 
-## Running the script
+# Running the script
 
 Navigate to the script’s location, make it executable, and run it:
 

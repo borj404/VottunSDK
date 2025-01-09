@@ -144,7 +144,7 @@ _parse_params() {
             if [[ "$char" == "," && $depth -eq 0 ]]; then
                 if [ -n "$buffer" ]; then
                     $first || result+=", "
-                    result+="$(_parse_structure "$buffer")"
+                    result+="$(_parse_params "$buffer")"
                     buffer=""
                     first=false
                 fi
@@ -154,7 +154,7 @@ _parse_params() {
         done <<< "$trimmed"
         [[ -n "$buffer" ]] && {
             $first || result+=", "
-            result+="$(_parse_structure "$buffer")"
+            result+="$(_parse_params "$buffer")"
         }      
         result+="]"
         echo "$result"

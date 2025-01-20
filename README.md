@@ -1,20 +1,20 @@
-This CLI tool for Unix-like systems provides a straightforward way to interact with Vottun APIs from the terminal.
+This CLI tools for Unix-like systems provides a straightforward way to interact with Vottun APIs from the terminal.
 
-Feel free to modify the script to suit your needs.
+Feel free to modify the scripts to suit your needs.
 
-# Prerequisites
+## Prerequisites
 
 Ensure that both _curl_ and _jq_ are installed on your system.
 
-# Setup
+## Setup
 
 Replace the content in lines 3-4 (between the quotation marks) with your own _App ID_ and _API key_, which you can easily obtain by accessing your [Vottun account](https://app.vottun.io/).
 
-Enter your _email_ on line 5 to use the Custodied Wallets functions.
+Enter your _email_ on line 5 to use the Custodied Wallets functions (_evm-cli_).
 
-# Running the script
+## Running the scripts
 
-Navigate to the script’s location, make it executable, and run it:
+For example, for _evm-cli_, navigate to the script’s location, make it executable, and run it:
 
 ```
 chmod +x evm-cli
@@ -30,7 +30,7 @@ Run within the current shell environment:
 source evm-cli
 ```
 
-# Usage
+## Usage
 
 Type the function and fill in the required parameters.
 
@@ -44,21 +44,19 @@ To undo the previous entry type __<<__ , __..__ , __!undo__ , __!back__ or __!de
 
 All token amounts must be entered in standard units (without 18 decimals), not in wei as stated in the docs (e.g: 0.1, not 100,000,000,000,000,000).
 
-# Menu & Docs
+## Menu & Docs
 
 After launching the script, type _help_ to view the list of available functions.
 
-For detailed information about the APIs included in this script, refer to the [documentation](https://docs.vottun.io/).
+For detailed information about the APIs included in these scripts, refer to the [documentation](https://docs.vottun.io/).
 
-# Support
+## Support
 
 For any issues or questions, contact me on [Discord](https://discord.com/users/1206334838093643817).
 
-If you encounter any errors or bugs while running this script, please let me know.
+If you encounter any errors or bugs while running these scripts, please let me know.
 
-# Functions list
-
-## EVM CLI
+## EVM CLI functions list
 
 ### IPFS
 
@@ -146,7 +144,6 @@ __send_tx__: Call any public function implemented in a smart contract and modify
 
 __send_nat__: Transfer native assets from your custodied wallet.
 
-
 ### Web3 core
 
 __deploy__: Deploy a smart contract on the blockchain of your choice.
@@ -176,3 +173,31 @@ __gas_deploy__: Estimate the gas required for a smart contract deployment.
 __gas_tx__: Estimate the gas required to call any public function implemented in a smart contract.
 
 __gas_nat__: Estimate the gas required to transfer native assets.
+
+## Stellar CLI functions list
+
+__fund__: Fund an account on Testnet or Futurnet.
+
+__balance__: Retrieve the account balance on the desired network.
+
+__save__: Attach a smart contract to the Vottun ecosystem.
+
+__upload__: Upload and compile one or more contracts by selecting the directory (no need to zip the content).
+
+__deploy__: Deploy a contract on the desired network.
+
+__est_deploy__: Estimate the cost of deploying a contract on the desired network.
+
+__invoke__: Invoke any method of a deployed contract.
+
+__est_invoke__: Estimate the cost of invoking any method of a contract.
+
+__extend__: Extend the time a transaction remains valid.
+
+__methods__: Retrieve all the methods of a contract.
+
+__alive__: Check if an installed contract is alive.
+
+__instance_info__: Retrieve a contract instance's TTL info.
+
+__tx_info__: Retrieve information about any transaction.

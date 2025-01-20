@@ -1,0 +1,1000 @@
+#!/bin/bash
+
+APP_ID="HERE YOUR APP ID"
+API_KEY="HERE YOUR API KEY"
+
+cat << banner
+
+░░░░░░░██╗░█████╗░████████████████╗██╗░░░░░░███╗░░██╗  ░█▀▀█ ▒█▀▀█ ▀█▀ █▀▀
+██╗░░░██╔╝██╔══██╗╚══██╔═════██╔══╝██║░░░██╗████╗░██║  ▒█▄▄█ ▒█▄▄█ ▒█░ ▀▀█
+╚██╗░██╔╝░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██╔██╗██║  ▒█░▒█ ▒█░░░ ▄█▄ ▀▀▀
+░╚████╔╝░░██║░░██║░░░██║░░░░░██║░░░██║░░░██║██║╚████║
+░░╚██╔╝░░░╚█████╔╝░░░██║░░░░░██║░░░╚██████╔╝██║░╚███║   Stellar CLI v1.0.0
+░░░╚═╝░░░░░╚════╝░░░░╚═╝░░░░░╚═╝░░░░╚═════╝░╚═╝░░╚══╝ Scripted by @borj404
+
+banner
+
+help(){ # HELP MENU
+
+cat << menu
+
+Type the function and fill in the required parameters
+Press ⏎ after each prompt to continue
+To undo the previous entry type << , .. , !undo , !back or !del
+"All parameter inputs are handled dynamically, so you must NOT quote strings, even in arrays"
+(Optional parameters are indicated in parentheses)
+
+For detailed information about this APIs, visit: https://docs.vottun.io/api/coreStellar
+
+❮❮❮ AVAILABLE FUNCTIONS ❯❯❯
+
+~$ fund ―▸ Fund an account on Testnet or Futurenet
+~$ balance ―▸ Retrieve the account balance on the desired network
+~$ save ―▸ Attach a smart contract to the Vottun ecosystem
+~$ upload ―▸ Upload and compile one or more contracts by selecting the directory (no need to zip the content)
+~$ deploy ―▸ Deploy a contract on the desired network
+~$ est_deploy ―▸ Estimate the cost of deploying a contract on the desired network
+~$ invoke ―▸ Invoke any method of a deployed contract
+~$ est_invoke ―▸ Estimate the cost of invoking any method of a contract
+~$ extend ―▸ Extend the time a transaction remains valid
+~$ methods ―▸ Retrieve all the methods of a contract
+~$ alive ―▸ Check if an installed contract is alive
+~$ instance_info ―▸ Retrieve a contract instance's TTL info
+~$ tx_info ―▸ Retrieve information about any transaction
+
+menu
+}
+
+auth=("--header" "x-application-vkn: $APP_ID" "--header" "Authorization: Bearer $API_KEY")
+ct_json="--header 'Content-Type: application/json'"
+
+_check_input() {
+
+    local prompt="$1" var_name="$2" undo_step="$3" required="$4" validate_cmd="$5" empty_err="$6" format_err="$7"
+    
+    while true; do
+        read -e -p "$prompt" input        
+        if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+            if [[ "$undo_step" -ne -1 ]]; then
+                return 99
+            else
+                echo "Nothing to undo!"
+                continue
+            fi
+        fi
+        if [[ "$required" == "true" && -z "$input" ]]; then
+            echo "Error: $empty_err"
+        elif [ -n "$input" ] && ! eval "$validate_cmd"; then
+            echo "Error: $format_err"
+        else
+            eval "$var_name=\"\$input\""
+            return 0
+        fi
+    done
+}
+
+_step_back() {
+
+    [[ $? -eq 99 ]] && step=$((step - 1))
+}
+
+_parse_params() {
+
+    local input="$1"
+    [[ "$input" =~ ^[0-9]+$ && (${#input} -gt 31 || "$input" =~ (999999999999999|000000000000000)) ]] && { echo "\"$input\""; return; }
+    if [[ "$input" =~ ^\[.*\]$ ]]; then
+        local result="[" trimmed buffer="" depth=0 first=true
+        trimmed=$(echo "$input" | sed -E 's/^\[|\]$//g')       
+        while IFS= read -r -n1 char; do
+            [[ "$char" == "[" ]] && ((depth++))
+            [[ "$char" == "]" ]] && ((depth--))
+            if [[ "$char" == "," && $depth -eq 0 ]]; then
+                if [ -n "$buffer" ]; then
+                    $first || result+=", "
+                    result+="$(_parse_params "$buffer")"
+                    buffer=""
+                    first=false
+                fi
+            else
+                buffer+="$char"
+            fi
+        done <<< "$trimmed"
+        [[ -n "$buffer" ]] && {
+            $first || result+=", "
+            result+="$(_parse_params "$buffer")"
+        }      
+        result+="]"
+        echo "$result"
+        return
+    fi
+    [[ "$input" =~ ^\"[0-9]+\"$|^\"(true|false)\"$|^[0-9]+$|^(true|false)$ ]] && echo "$input" || echo "\"$input\""
+}
+
+_display_params() {
+
+    local -n params_ref=$1
+    [[ ${#params_ref[@]} -gt 0 ]] && { 
+        echo "Params: ["
+        local total=${#params_ref[@]}
+        for ((i=0; i<total; i++)); do
+            param="${params_ref[$i]}"
+            if [[ "$param" =~ ^\[.*\]$ ]]; then
+                echo -n "  ["
+                local first=true
+                while IFS= read -r item; do
+                    $first || echo -n ", "; first=false
+                    [[ "$item" =~ ^[0-9]+$|^(true|false)$ ]] && echo -n "$item" || echo -n "\"${item//\"/}\""
+                done <<< "$(echo "$param" | sed -E 's/^\[|\]$//g' | tr ',' '\n')"
+                echo -n "]"
+            elif [[ "$param" =~ ^[0-9]+$ && (${#param} -gt 31 || "$param" =~ (999999999999999|000000000000000)) ]]; then
+                echo -n "  $param"
+            elif [[ "$param" =~ ^[0-9]+$|^(true|false)$|^\".*\"$ ]]; then
+                echo -n "  $param"
+            else
+                echo -n "  \"$param\""
+            fi
+            [[ $i -lt $((total-1)) ]] && echo "," || echo ""
+        done
+        echo "]"
+    }
+}
+
+_confirmation() {
+
+    while true; do
+        read -e -p "Do you want to proceed with these parameters? (Y/N): " confirm
+        [[ "$confirm" =~ ^(<<|\.\.|!undo|!back|!del)$ ]] && return 99
+        case "$confirm" in
+            [Yy]*)
+                echo
+                return 0
+                ;;
+            [Nn]*)
+                echo
+                echo "Process cancelled."
+                return 1
+                ;;
+            *)
+                echo "Invalid input! Try again..."
+                ;;
+        esac
+    done
+}
+
+_network_details() {
+
+    local network=$1 net_name identifier url_address url_tx
+
+    case $network in
+        0)
+            net_name="Testnet"
+            identifier=100000000
+            url_address="https://testnet.steexp.com/account/"
+            url_tx="https://testnet.steexp.com/tx/"
+            ;;
+        1)
+            net_name="Futurenet"
+            identifier=100000001
+            url_address="https://futurenet.steexp.com/account/"
+            url_tx="https://futurenet.steexp.com/tx/"
+            ;;
+        2)
+            net_name="Pubnet"
+            identifier=100000002
+            url_address="https://steexp.com/account/"
+            url_tx="https://steexp.com/tx/"
+            ;;
+    esac
+    echo "$net_name|$identifier|$url_address|$url_tx"
+}
+
+_loading() {
+
+    local duration=0.5 bar_length=24
+    for ((i = 0; i <= bar_length; i++)); do
+        local progress=$(for ((j = 0; j < i; j++)); do printf "\033[44m \033[0m "; done)
+        local empty=$(for ((j = i; j < bar_length; j++)); do printf "  "; done)
+        printf "\r%s%s" "$progress" "$empty"
+        sleep $(bc <<< "$duration / $bar_length")
+    done
+    echo
+}
+
+
+####################
+### STELLAR CORE ###
+####################
+
+fund() { # FUND AN ACCOUNT ON TESTNET OR FUTURNET
+
+    local account networkId step=1
+
+    echo "Please enter the following parameters to fund your account:"
+    echo -e "account networkId\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Account: " account -1 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Account is required." "Account must be 56 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet"
+                _check_input "Network ID: " networkId 1 "true" '[[ "$input" =~ ^[01]$ ]]' \
+                    "Network ID is required." "Please, choose '0' or '1'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$networkId")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Account: $account"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --arg account "$account" \
+        --argjson networkId "$identifier" \
+        '{
+            account: $account,
+            networkId: $networkId
+        }')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/account/fund' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    _loading
+    echo -e "Server response:\n$response"
+}
+
+balance() { # RETRIEVE THE ACCOUNT BALANCE ON THE DESIRED NETWORK
+
+    local account networkId step=1
+
+    echo "Please enter the following parameters to retrieve the account balance:"
+    echo -e "account networkId\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Account: " account -1 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Account is required." "Account must be 56 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " networkId 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$networkId")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Account: $account"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --arg account "$account" \
+        --argjson networkId "$identifier" \
+        '{
+            account: $account,
+            networkId: $networkId
+        }')
+
+    local response=$(curl --silent --location --request GET 'https://api.vottun.tech/stellar/v1/account/balance' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+save(){ # ATTACH A SMART CONTRACT TO THE VOTTUN ECOSYSTEM
+
+    local file name description step=1
+
+    echo "Please enter the following parameters to save the smart contract:"
+    echo -e "file name (description)\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "File: " file -1 "true" 'true' "File is required." ""
+                [[ $? -eq 99 ]] && continue
+                [[ ! "$file" =~ \.wasm$ ]] && { echo "Error: File must have a .wasm extension."; continue; }
+                [ -f "$file" ] || { echo "Error: File doesn't exist at the specified path."; continue; }
+                step=2
+                ;;
+            2)
+                _check_input "Name: " name 1 "true" 'true' "Name is required." ""
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Description (optional): " description 2 "false" '' "" "" 
+                _step_back && continue
+                step=4
+                ;;           
+            4)
+                echo -e "\nYou've entered the following parameters:"
+                echo "File: $file"
+                echo "Name: $name"
+                [ -n "$description" ] && echo "Description: $description"
+                echo
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/save' \
+        "${auth[@]}" --header 'Content-Type: multipart/form-data' \
+        --form 'file=@"'"$file"'"' \
+        --form 'name="'"$name"'"' \
+        ${description:+--form 'description="'"$description"'"'})
+
+    _loading
+    echo -e "\nServer response:\n$response"
+}
+
+upload(){ # UPLOAD AND COMPILE ONE OR MORE CONTRACTS BY SELECTING THE DIRECTORY (NO NEED TO ZIP THE CONTENT)
+
+   local file tempZip zipFiles extractDir
+
+    echo -e "Please enter the directory path to upload one or more contracts:\n"
+
+    while true; do 
+        _check_input "Directory path: " file -1 "true" 'true' "Directory path is required." ""
+        [[ $? -eq 99 ]] && continue
+        if [ -d "$file" ]; then
+            tempZip="${file%/}.zip"
+            zipFiles=$(find "$file" -maxdepth 1 -type f -name "*.zip")
+            if [[ -n "$zipFiles" ]]; then
+                if [[ $(echo "$zipFiles" | wc -l) -eq 1 ]]; then
+                    file="$zipFiles"
+                else
+                    extractDir="$file/_temp_extract"
+                    mkdir -p "$extractDir"                   
+                    for zip in $zipFiles; do
+                        unzip -o "$zip" -d "$extractDir" || {
+                            echo "Error: Failed to extract $zip"; 
+                            return 1; 
+                        }
+                    done                   
+                    (cd "$extractDir" && zip -r "../$(basename "$file").zip" .) || {
+                        echo "Error: Failed to create zip file."; 
+                        return 1; 
+                    }                    
+                    rm -rf "$extractDir"
+                    file="$tempZip"
+                fi
+            else
+                (cd "$file" && zip -r "../$(basename "$file").zip" .) || {
+                    echo "Error: Failed to create zip file."; 
+                    return 1; 
+                }
+                file="$tempZip"
+            fi
+        elif [ ! -f "$file" ]; then
+            echo "Error: Directory path doesn't exist."; 
+            continue
+        fi
+                
+        echo -e "\nYou've entered the following parameter:\nPath: $file\n"
+
+        _confirmation && break || [[ $? -eq 99 ]] || return 1
+    done
+
+    local response=$(curl --silent --location --request POST \
+        'https://api.vottun.tech/stellar/v1/contract/upload' "${auth[@]}" \
+        --header 'Content-Type: multipart/form-data' \
+        --form 'file=@"'"$file"'"')
+
+    _loading
+    echo -e "\nServer response:\n$response"
+    [[ -f "$tempZip" ]] && rm -f "$tempZip"
+}
+
+deploy() { # DEPLOY A CONTRACT ON THE DESIRED NETWORK
+
+    local contractSpecsId myReference blockchainNetwork step=1
+
+    echo "Please enter the following parameters to deploy the contract:"
+    echo -e "contractSpecsId blockchainNetwork (myReference)\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractSpecsId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "My Reference (optional): " myReference 1 "false" '' "" "" 
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 2 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractSpecsId"
+                echo "Network: $net_name"
+                [ -n "$myReference" ] && echo "My Reference: $myReference"
+                echo
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson contractSpecsId "$contractSpecsId" \
+        --argjson blockchainNetwork "$identifier" \
+        --arg myReference "$myReference" \
+        '{
+            contractSpecsId: $contractSpecsId,
+            blockchainNetwork: $blockchainNetwork
+        } +
+        (if $myReference != "" then {myReference: $myReference} else {} end)')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/deployment' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+    txHash=$(echo "$response" | jq -r '.txHash // empty')
+
+    if [[ -n "$txHash" ]]; then
+        address=$(echo "$response" | jq -r '.address // empty')
+        echo -e "\nDeploying the contract on $net_name..."
+        _loading
+        echo -e "\nBlock explorer URLs:\n$url_address$address\n$url_tx$txHash"
+    fi
+}
+
+est_deploy() { # ESTIMATE THE COST OF DEPLOYING A CONTRACT ON THE DESIRED NETWORK
+
+    local contractSpecsId myReference blockchainNetwork step=1
+
+    echo "Please enter the following parameters to estimate the contract deployment cost:"
+    echo -e "contractSpecsId blockchainNetwork (myReference)\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractSpecsId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractSpecsId"
+                echo "Network: $net_name"
+                [ -n "$myReference" ] && echo "My Reference: $myReference"
+                echo
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson contractSpecsId "$contractSpecsId" \
+        --argjson blockchainNetwork "$identifier" \
+        '{
+            contractSpecsId: $contractSpecsId,
+            blockchainNetwork: $blockchainNetwork
+        }')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/deployment/estimate' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+invoke() { # INVOKE ANY METHOD OF A DEPLOYED CONTRACT
+
+    local blockchainNetwork myReference restore address method numParams params step=1
+
+    echo "Please enter the following parameters to invoke the contract method:"
+    echo -e "blockchainNetwork restore address method params (myReference)\n"
+
+    while true; do
+        case $step in
+            1)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork -1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "My Reference (optional): " myReference 1 "false" '' "" "" 
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                echo -e "Extend the TTL?\n0. False\n1. True"
+                _check_input "Choose '0' or '1': " restore 2 "true" '[[ "$input" =~ ^[01]$ ]]' \
+                    "This flag is required." "Please choose '0' (false) or '1' (true)."
+                _step_back && continue
+                restore=false
+                [[ "$input" == "1" ]] && restore=true
+                step=4
+                ;;
+            4)
+                _check_input "Address: " address 3 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Address is required." "Address must be 56 characters long."
+                _step_back && continue
+                step=5
+                ;;
+            5)
+                _check_input "Method: " method 4 "true" '[[ "$input" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]' \
+                    "Method is required." "Method format is wrong."
+                _step_back && continue
+                step=6
+                ;;
+            6)
+                _check_input "How many parameters do you want to input? " numParams 5 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
+                _step_back && continue
+                numParams=${numParams:-0}
+                params=()
+                step=7
+                ;;
+            7)
+                local i=1
+                while (( i <= numParams )); do
+                    read -e -p "Param $i: " input
+                    if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+                        if (( i == 1 )); then
+                            step=6 && break
+                        elif (( i > 1 )); then
+                            params=("${params[@]:0:${#params[@]}-1}") && ((i--))
+                        fi
+                    elif [[ -n "$input" ]]; then
+                        params+=("$input") && ((i++))
+                    else
+                        echo "Parameter $i is required."
+                    fi
+                done
+                (( i > numParams )) && step=8
+                ;;
+            8)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Network: $net_name"
+                echo "Restore: $restore"
+                echo "Address: $address"               
+                echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
+                done
+                _display_params params
+                [ -n "$myReference" ] && echo "My Reference: $myReference"
+                echo
+
+                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        --arg myReference "$myReference" \
+        --argjson restore "$restore" \
+        --arg address "$address" \
+        --arg method "$method" \
+        '{
+            blockchainNetwork: $blockchainNetwork,
+            restore: $restore,
+            address: $address,
+            method: $method
+        } +
+        (if $myReference != "" then {myReference: $myReference} else {} end)')
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/invoke' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    _loading
+    echo -e "\nServer response:\n$response"
+    txHash=$(echo "$response" | jq -r '.txHash // empty')
+    [[ -n "$txHash" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
+}
+
+est_invoke() { # ESTIMATE THE COST OF INVOKING ANY METHOD OF A CONTRACT
+
+    local blockchainNetwork myReference restore address method numParams params step=1
+
+    echo "Please enter the following parameters to estimate the cost of invoking the contract method:"
+    echo -e "blockchainNetwork restore address method params (myReference)\n"
+
+    while true; do
+        case $step in
+            1)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork -1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "My Reference (optional): " myReference 1 "false" '' "" "" 
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                echo -e "Extend the TTL?\n0. False\n1. True"
+                _check_input "Choose '0' or '1': " restore 2 "true" '[[ "$input" =~ ^[01]$ ]]' \
+                    "This flag is required." "Please choose '0' (false) or '1' (true)."
+                _step_back && continue
+                restore=false
+                [[ "$input" == "1" ]] && restore=true
+                step=4
+                ;;
+            4)
+                _check_input "Address: " address 3 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Address is required." "Address must be 56 characters long."
+                _step_back && continue
+                step=5
+                ;;
+            5)
+                _check_input "Method: " method 4 "true" '[[ "$input" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]' \
+                    "Method is required." "Method format is wrong."
+                _step_back && continue
+                step=6
+                ;;
+            6)
+                _check_input "How many parameters do you want to input? " numParams 5 "false" \
+                    '[[ "$input" =~ ^[0-9]+$ ]]' "" "Please enter a valid integer."
+                _step_back && continue
+                numParams=${numParams:-0}
+                params=()
+                step=7
+                ;;
+            7)
+                local i=1
+                while (( i <= numParams )); do
+                    read -e -p "Param $i: " input
+                    if [[ "$input" =~ ^(<<|\.\.|!undo|!back|!del)$ ]]; then
+                        if (( i == 1 )); then
+                            step=6 && break
+                        elif (( i > 1 )); then
+                            params=("${params[@]:0:${#params[@]}-1}") && ((i--))
+                        fi
+                    elif [[ -n "$input" ]]; then
+                        params+=("$input") && ((i++))
+                    else
+                        echo "Parameter $i is required."
+                    fi
+                done
+                (( i > numParams )) && step=8
+                ;;
+            8)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Network: $net_name"
+                echo "Restore: $restore"
+                echo "Address: $address"               
+                echo "Method: $method"
+                local final_params=$(jq -n '[]')
+                for param in "${params[@]}"; do
+                    final_params=$(echo "$final_params" | jq ". + [$(_parse_params "$param")]")
+                done
+                _display_params params
+                [ -n "$myReference" ] && echo "My Reference: $myReference"
+                echo
+
+                _confirmation && step=0 || { [[ $? -eq 99 ]] && step=6 || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        --arg myReference "$myReference" \
+        --argjson restore "$restore" \
+        --arg address "$address" \
+        --arg method "$method" \
+        '{
+            blockchainNetwork: $blockchainNetwork,
+            restore: $restore,
+            address: $address,
+            method: $method
+        } +
+        (if $myReference != "" then {myReference: $myReference} else {} end)')
+    data=$(echo "$data" | jq --argjson params "$final_params" '. + {params: $params}')
+    data=$(echo "$data" | sed -E 's/"([0-9]{16,})"/\1/g')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/invoke/estimate' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+extend() { # EXTEND THE TIME A TRANSACTION REMAINS VALID
+
+    local blockchainNetwork address extend_to step=1
+
+    echo "Please enter the following parameters to extend the transaction's TTL:"
+    echo -e "blockchainNetwork address extend_to\n"
+
+    while true; do
+        case $step in
+            1)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork -1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                _check_input "Address: " address -1 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Address is required." "Address must be 56 characters long."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Extend To: " extend_to 2 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Extend To is required." "Extend To must be an integer number."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Network: $net_name"
+                echo "Address: $address"
+                echo -e "Extend To: $extend_to\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        --arg address "$address" \
+        --argjson extend_to "$extend_to" \
+        '{
+            blockchainNetwork: $blockchainNetwork,
+            address: $address,
+            extend_to: $extend_to
+        }')
+
+    local response=$(curl --silent --location --request POST 'https://api.vottun.tech/stellar/v1/contract/invoke/extendttl' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    _loading
+    echo -e "\nServer response:\n$response"
+    txHash=$(echo "$response" | jq -r '.txHash // empty')
+    [[ -n "$txHash" ]] && echo -e "\nBlock explorer URL:\n$url_tx$txHash"
+}
+
+methods(){ # RETRIEVE ALL THE METHODS OF A CONTRACT
+
+    local contractId blockchainNetwork step=1
+
+    echo "Please enter the following parameters to retrieve the methods of the contract:"
+    echo -e "contractSpecsId blockchainNetwork\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractId"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        '{
+            blockchainNetwork: $blockchainNetwork
+        }')
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/stellar/v1/contract/'$contractId'/methods' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+alive(){ # CHECK IF AN INSTALLED CONTRACT IS ALIVE
+
+    local contractId blockchainNetwork step=1
+
+    echo "Please enter the following parameters to check if the contract is alive:"
+    echo -e "contractSpecsId blockchainNetwork\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Specs ID: " contractId -1 "true" '[[ "$input" =~ ^[0-9]+$ ]]' \
+                    "Contract Specs ID is required." "Contract Specs ID must be an integer number."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Specs ID: $contractId"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        '{
+            blockchainNetwork: $blockchainNetwork
+        }')
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/stellar/v1/contract/'$contractId'/contracttl' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+instance_info(){ # RETRIEVE A CONTRACT INSTANCE'S TTL INFO
+
+    local address blockchainNetwork sourceAccount step=1
+
+    echo "Please enter the following parameters to retrieve the contract instance's TTL info:"
+    echo -e "address blockchainNetwork sourceAccount\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Contract Address: " address -1 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Contract Address is required." "Contract Address must be 56 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                _check_input "Source Account: " sourceAccount 2 "true" '[[ "$input" =~ ^[0-9A-Z]{56}$ ]]' \
+                    "Source Account is required." "Source Account must be 56 characters long."
+                _step_back && continue
+                step=4
+                ;;
+            4)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Contract Address: $address"
+                echo "Network: $net_name"
+                echo -e "Source Account: $sourceAccount\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local data=$(jq -n \
+        --argjson blockchainNetwork "$identifier" \
+        --arg sourceAccount "$sourceAccount" \
+        '{
+            blockchainNetwork: $blockchainNetwork,
+            sourceAccount: $sourceAccount
+        }')
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/stellar/v1/contract/'$address'/instancettl' \
+        "${auth[@]}" $ct_json --data-raw "$data")
+
+    echo -e "Server response:\n$response"
+}
+
+tx_info(){ # RETRIEVE INFORMATION ABOUT ANY TRANSACTION
+
+    local txHash blockchainNetwork step=1
+
+    echo "Please enter the following parameters to retrieve the transaction info:"
+    echo -e "txHash blockchainNetwork\n"
+
+    while true; do
+        case $step in
+            1)
+                _check_input "Tx Hash: " txHash -1 "true" '[[ "$input" =~ ^[0-9a-fA-F]{64}$ ]]' \
+                    "Tx Hash is required." "Tx Hash must be 64 characters long."
+                [[ $? -eq 99 ]] && continue
+                step=2
+                ;;
+            2)
+                echo -e "Choose the network number you want to use:\n0. Testnet\n1. Futurenet\n2. Pubnet"
+                _check_input "Network ID: " blockchainNetwork 1 "true" '[[ "$input" =~ ^[012]$ ]]' \
+                    "Network ID is required." "Please, choose '0', '1' or '2'."
+                _step_back && continue
+                step=3
+                ;;
+            3)
+                IFS='|' read -r net_name identifier url_address url_tx <<< "$(_network_details "$blockchainNetwork")"
+                echo -e "\nYou've entered the following parameters:"
+                echo "Tx Hash: $txHash"
+                echo -e "Network: $net_name\n"
+
+                _confirmation && step=0 || { _step_back || return 1; }
+                [[ $step -eq 0 ]] && break
+                ;;
+        esac
+    done
+
+    local response=$(curl --silent --location --request GET \
+        'https://api.vottun.tech/stellar/v1/transaction/'$txHash'/info?network='$identifier'' "${auth[@]}")
+
+    echo -e "Server response:\n$response"
+}
